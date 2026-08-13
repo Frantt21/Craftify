@@ -19,7 +19,8 @@ recibirlos el plugin — está definido en [`PROTOCOL.md`](PROTOCOL.md).
 │                              │                                     │                              │
 │  Detecta Spotify en el SO    │   {"state":"playing",               │  Guarda el estado por        │
 │  Lee el título de la ventana │    "track":"Canción - Artista",     │  jugador (UUID)              │
-│  Envía SOLO cuando cambia    │    "timestamp": ...}                │  Holograma + /nowplaying     │
+│  Envía SOLO cuando cambia    │    "timestamp": ...}                │  Nametag + /nowplaying       │
+│  Ve su nombre en 3ª persona  │                                     │  (holograma opcional)        │
 └──────────────────────────────┘                                     └──────────────────────────────┘
 ```
 
@@ -30,8 +31,11 @@ recibirlos el plugin — está definido en [`PROTOCOL.md`](PROTOCOL.md).
    `minecraft:custom_payload` por el canal `craftify:title` con un JSON de tres campos:
    `state`, `track` y `timestamp`.
 3. **El plugin** corre en el servidor, decodifica el payload y guarda el último estado por
-   jugador. Hoy ya lo expone con un **holograma** sobre el jugador (icono de música +
-   título) y el comando `/nowplaying`.
+   jugador. Hoy ya lo expone en el **nombre flotante** del jugador (nametag: nombre +
+   canción, sin lag) y con el comando `/nowplaying`. Un **holograma** (`TextDisplay`)
+   sigue disponible como modo opcional.
+4. **El mod** además permite ver tu propio nombre en **tercera persona (F5)** — vanilla lo
+   oculta — así el jugador ve su nametag con la canción.
 
 El mod **no interpreta la música** y el plugin **no toca el sistema operativo**: cada
 componente hace una sola cosa, y se comunican únicamente por el protocolo definido en
@@ -51,9 +55,10 @@ componente hace una sola cosa, y se comunican únicamente por el protocolo defin
 
 ## Estado actual
 
-- ✅ El mod detecta Spotify y envía `craftify:title` al servidor en cada cambio de estado.
-- ✅ El plugin Paper recibe el canal, guarda el estado por jugador y muestra un holograma
-  con el título (esqueleto funcional).
+- ✅ El mod detecta Spotify, envía `craftify:title` en cada cambio de estado y muestra el
+  propio nombre en tercera persona (F5).
+- ✅ El plugin Paper recibe el canal, guarda el estado por jugador y lo muestra en el
+  nametag del jugador (holograma opcional).
 - ⏳ Lógica de conversión en el plugin (chat, scoreboard, Discord, Twitch, etc.).
 
 ## Compilación rápida

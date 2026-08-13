@@ -18,19 +18,31 @@ Spotify de cada jugador.
   - `closed` → Spotify cerrado
 - Limpia el estado al desconectar el jugador.
 - Comando `/nowplaying` para verificar el estado propio.
-- **Holograma** sobre el jugador con un icono de música y el título (solo con `playing`):
-  usa una entidad `TextDisplay` que sigue al jugador, sin dependencias externas. Visible
-  para todos los jugadores cercanos. Configurable en `config.yml` (`hologram.*`).
+- **Nametag** (por defecto): muestra el título en el **nombre flotante** del jugador
+  (`customName`). Al ser parte de la entidad, sigue al jugador **sin lag** (a diferencia
+  del holograma, que se teletransporta por tick). El jugador dueño del nombre lo ve en
+  tercera persona (F5) si el mod del cliente incluye el mixin de "ver tu propio nombre".
+- **Holograma** (opcional): entidad `TextDisplay` que sigue al jugador, sin dependencias
+  externas. Puede notarse un pequeño retraso al moverse. Configurable en `config.yml`.
 
 ## Configuración (`config.yml`)
 
 ```yaml
+nametag:
+  enabled: true   # activa/desactiva el nametag (modo por defecto)
+  # Formato (MiniMessage). Placeholders: {name} = jugador, {track} = "Canción - Artista".
+  # <newline> crea una segunda línea.
+  format: "<yellow>{name}</yellow><newline><green>♪ </green><white>{track}</white>"
+
 hologram:
-  enabled: true   # activa/desactiva el holograma
+  enabled: false  # holograma opcional (era el modo anterior; sigue disponible)
   icon: "♪ "       # glifo del icono (fuente por defecto; probar "♫ " si no se ve)
   height: 2.15    # altura sobre el jugador en bloques
   scale: 0.6      # tamaño del texto
 ```
+
+Con `state` distinto de `playing` (o sin título) el nametag se restaura al nombre normal
+del jugador.
 
 ## Requisitos
 
@@ -56,9 +68,10 @@ carpeta `plugins` del servidor Paper.
 | `SpotifyListener` | `PluginMessageListener`: decodifica `craftify:title` (VarInt + UTF-8 + JSON) |
 | `PlayerSpotifyState` | Registro con `state`, `track`, `timestamp` + parseo del JSON |
 | `SpotifyStateManager` | Último estado por UUID del jugador (en memoria) |
-| `PlayerListener` | Limpia el estado y el holograma al desconectar |
+| `PlayerListener` | Limpia el estado y la visualización al desconectar |
 | `command/NowPlayingCommand` | `/nowplaying`: muestra el estado propio |
-| `hologram/HologramManager` | Holograma `TextDisplay` sobre el jugador (icono + título) |
+| `nametag/NametagManager` | Muestra el título en el nombre flotante del jugador (sin lag) |
+| `hologram/HologramManager` | Holograma `TextDisplay` opcional (icono + título) |
 
 ## Prueba rápida
 

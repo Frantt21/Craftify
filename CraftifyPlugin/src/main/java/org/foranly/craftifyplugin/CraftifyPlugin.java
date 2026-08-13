@@ -1,8 +1,10 @@
 package org.foranly.craftifyplugin;
 
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.foranly.craftifyplugin.command.NowPlayingCommand;
 import org.foranly.craftifyplugin.hologram.HologramManager;
+import org.foranly.craftifyplugin.nametag.NametagManager;
 
 /**
  * Plugin Paper que recibe el canal {@code craftify:title} enviado por el mod Craftify
@@ -17,19 +19,21 @@ public final class CraftifyPlugin extends JavaPlugin {
 
     private SpotifyStateManager stateManager;
     private HologramManager holograms;
+    private NametagManager nametags;
 
     @Override
     public void onEnable() {
         stateManager = new SpotifyStateManager();
+        nametags = new NametagManager(this);
         holograms = new HologramManager(this);
         holograms.start();
 
         // Recibir C→S: el payload llega como minecraft:custom_payload (PROTOCOL.md §3.2).
         getServer().getMessenger().registerIncomingPluginChannel(this, CHANNEL,
-                new SpotifyListener(stateManager, holograms, getLogger()));
+                new SpotifyListener(stateManager, holograms, nametags, getLogger()));
 
-        // Limpiar el estado y el holograma al desconectar (PROTOCOL.md §4.1).
-        getServer().getPluginManager().registerEvents(new PlayerListener(stateManager, holograms), this);
+        // Limpiar el estado y la visualización al desconectar (PROTOCOL.md §4.1).
+        getServer().getPluginManager().registerEvents(new PlayerListener(stateManager, holograms, nametags), this);
 
         // Verificación: /nowplaying
         getCommand("nowplaying").setExecutor(new NowPlayingCommand(stateManager));
@@ -40,6 +44,10 @@ public final class CraftifyPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         getServer().getMessenger().unregisterIncomingPluginChannel(this);
+        // Restaurar los nametags modificados antes de apagar.
+        if (nametags != null) {
+            getServer().getOnlinePlayers().forEach(nametags::reset);
+        }
         if (holograms != null) {
             holograms.shutdown();
         }

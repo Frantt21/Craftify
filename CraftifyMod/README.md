@@ -87,6 +87,21 @@ Automatización en macOS, instalar `playerctl`/`xdotool` en Linux, etc.).
 El estado de pausa persiste entre mundos (solo se pierde al cerrar el juego). El comando
 `/craftify spotify` refleja si el envío está pausado.
 
+## Ver tu propio nombre en tercera persona (F5)
+
+Por defecto Minecraft **no muestra el nametag del propio jugador** ni en primera ni en
+tercera persona: el cliente lo oculta porque el jugador local coincide con la cámara
+(`entity == minecraft.getCameraEntity()` en `LivingEntityRenderer#shouldShowName`).
+
+El mod lo habilita: con la cámara en tercera persona (F5), verás tu **propio nombre**
+flotando sobre tu cabeza — y, si el servidor tiene el plugin con el modo nametag, también
+la canción que estás escuchando (el plugin usa `customName`, que el mixin muestra).
+
+- Implementación: mixin `LivingEntityRendererMixin` (registrado en
+  `craftify.client.mixins.json`), inyectado en `shouldShowName`.
+- Se activa solo mirándote a ti mismo en tercera persona: no afecta a primera persona ni
+  al espectar a otros jugadores, y respeta el estado de HUD oculto (F1).
+
 ## Envío de paquetes
 
 Mientras el jugador está en un mundo (singleplayer o conectado a un servidor), un hilo aparte
