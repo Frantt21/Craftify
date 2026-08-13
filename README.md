@@ -10,8 +10,9 @@ Twitch, etc.).
 
 > ⚠️ **Estado actual:** el mod detecta el proceso de Spotify, lee el título y **envía el
 > paquete `craftify:title` al servidor cada vez que el título cambia** (mientras el jugador
-> está en un mundo). Lo que falta es el **plugin del servidor** que reciba y convierta esos
-> paquetes — el protocolo on-wire ya está definido y documentado abajo.
+> está en un mundo). Ya existe un **esqueleto de plugin Paper** ([`CraftifyPlugin/`](CraftifyPlugin/))
+> que recibe y guarda el estado por jugador; falta la **lógica de conversión** (exponerlo en
+> chat, Discord, Twitch, etc.). El protocolo on-wire está definido en [`PROTOCOL.md`](PROTOCOL.md).
 
 ## Arquitectura
 
@@ -34,7 +35,9 @@ Twitch, etc.).
 ## Detección de Spotify
 
 El mod detecta el proceso de Spotify que está corriendo en el SO del jugador y lee el título
-de su ventana, que cambia con cada canción (formato típico: `Canción - Artista`).
+de su ventana, que cambia con cada canción (formato típico: `Canción - Artista`). En Windows
+el título se sigue leyendo aunque Spotify esté **minimizado o en la bandeja** (la ventana
+oculta conserva el texto; solo se descartan las ventanas auxiliares IME/GDI+).
 
 ### Ejecutables soportados (uno por SO)
 
@@ -46,7 +49,8 @@ de su ventana, que cambia con cada canción (formato típico: `Canción - Artist
 
 ### Requisitos por sistema operativo
 
-- **Windows**: PowerShell (incluido por defecto). No requiere permisos adicionales.
+- **Windows**: usa una sonda nativa (JNA/Win32) sin permisos adicionales; PowerShell solo se
+  usa como fallback si JNA no está disponible.
 - **macOS**: la sonda nativa (CoreGraphics) detecta el proceso sin permisos, pero leer el
   **título** de la ventana de otra app requiere permiso de **Grabación de Pantalla**
   (Ajustes del Sistema → Privacidad y seguridad → Grabación de pantalla). Si no se otorga,
@@ -81,6 +85,7 @@ Salida de ejemplo:
 ```
 [Craftify] Sistema operativo: WINDOWS
 [Craftify] Proceso de Spotify (Spotify.exe): corriendo
+[Craftify] Estado: reproduciendo (playing)
 [Craftify] Título actual: Mi Canción Favorita - Mi Artista
 [Craftify] Envío de paquetes: activo (detección en tiempo real de cambios de canción)
 ```
@@ -193,7 +198,9 @@ El plugin será quien decida qué hacer con el dato (validarlo, formatearlo, exp
 
 1. ✅ Detección del proceso de Spotify y lectura del título (`/craftify spotify`).
 2. ✅ Envío de paquetes `craftify:title` al servidor cuando el título cambie.
-3. ⏳ Plugin del servidor que reciba, entienda y convierta los paquetes.
+3. ✅ (esqueleto) Plugin Paper ([`CraftifyPlugin/`](CraftifyPlugin/)) que recibe el canal
+   `craftify:title` y guarda el estado por jugador.
+4. ⏳ Lógica de conversión en el plugin (chat, scoreboard, Discord, Twitch, etc.).
 
 ## Compilación
 

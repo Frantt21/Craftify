@@ -1,0 +1,37 @@
+plugins {
+    id 'java'
+}
+
+group = project.group
+version = project.version
+
+base {
+    archivesName = 'CraftifyPlugin'
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'papermc'
+        url = 'https://repo.papermc.io/repository/maven-public/'
+    }
+}
+
+dependencies {
+    // API de Paper para Minecraft 26.2 (ver https://repo.papermc.io/paper/paper-api)
+    compileOnly 'io.papermc.paper:paper-api:26.2.build.112-stable'
+}
+
+java {
+    // Igual que el mod cliente: apuntamos a la versión de Java del servidor (25).
+    def targetJavaVersion = project.target_java_version.toInteger()
+    tasks.withType(JavaCompile).configureEach {
+        it.options.encoding = 'UTF-8'
+        if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
+            it.options.release.set(targetJavaVersion)
+        }
+    }
+    if (JavaVersion.current() < JavaVersion.toVersion(targetJavaVersion)) {
+        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+}

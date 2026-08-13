@@ -13,6 +13,7 @@ import com.sun.jna.win32.StdCallLibrary;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -83,6 +84,18 @@ public final class WindowsSpotify {
     // --- User32: título de la ventana (por PID) ---
 
     private static String windowTitle(Set<Integer> spotifyPids) {
+        // 1er pase: ventanas visibles (el título principal suele estar aquí).
+        String title = windowTitlePass(spotifyPids, true);
+        if (title != null) {
+            return title;
+        }
+        // 2do pase: todas las ventanas de Spotify. Cuando Spotify se oculta a la bandeja la
+        // ventana deja de ser visible pero conserva el texto del título (GetWindowText sigue
+        // funcionando); solo hay que descartar las ventanas auxiliares (IME, GDI+).
+        return windowTitlePass(spotifyPids, false);
+    }
+
+    private static String windowTitlePass(Set<Integer> spotifyPids, boolean visibleOnly) {
         final String[] found = new String[1];
         User32.INSTANCE.EnumWindows((hWnd, userData) -> {
             IntByReference pid = new IntByReference();
@@ -90,18 +103,29 @@ public final class WindowsSpotify {
             if (!spotifyPids.contains(pid.getValue())) {
                 return true;
             }
-            if (!User32.INSTANCE.IsWindowVisible(hWnd)) {
+            if (visibleOnly && !User32.INSTANCE.IsWindowVisible(hWnd)) {
                 return true;
             }
             char[] buffer = new char[2048];
             int length = User32.INSTANCE.GetWindowText(hWnd, buffer, buffer.length);
             if (length > 0) {
-                found[0] = new String(buffer, 0, length);
-                return false; // detener la enumeración
+                String candidate = new String(buffer, 0, length);
+                if (!isAuxiliaryWindow(candidate)) {
+                    found[0] = candidate;
+                    return false; // detener la enumeración
+                }
             }
             return true;
         }, null);
         return found[0];
+    }
+
+    /** Ventanas auxiliares de Spotify (IME, GDI+) que no son la ventana principal. */
+    private static boolean isAuxiliaryWindow(String title) {
+        String lower = title.toLowerCase(Locale.ROOT);
+        return lower.contains("default ime")
+                || lower.contains("msctfime")
+                || lower.startsWith("gdi+");
     }
 
     private static int indexOfNul(char[] chars) {

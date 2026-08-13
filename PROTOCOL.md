@@ -21,14 +21,43 @@ y cómo el plugin debe recibirlos y usarlos.
 
 ---
 
+## ⚡ Referencia rápida para el plugin
+
+| Qué | Valor |
+|-----|-------|
+| Paquete | `minecraft:custom_payload`, fase `play` |
+| Canal | `craftify:title` |
+| Dirección | Cliente → Servidor |
+| Payload | `[VarInt longitud][bytes UTF-8 de un JSON]` |
+| JSON | `{"state":"...","track":"...","timestamp":...}` |
+| Estados | `playing` · `no_track` · `closed` |
+| Frecuencia | **Solo cuando el estado cambia** (nada de heartbeat) |
+
+Reglas de oro:
+
+1. El **último paquete recibido ES el estado actual** del jugador: no esperes actualizaciones
+   periódicas.
+2. Guarda el estado por UUID y **bórralo al desconectar** el jugador.
+3. Usa `timestamp` para descartar paquetes viejos/duplicados.
+4. `playing` no significa necesariamente reproduciendo: el mod no distingue pausa
+   (el título de la ventana no cambia al pausar).
+5. `track` es un único string `"Canción - Artista"`; separar título y artista es trabajo del
+   plugin (p. ej. por el último ` - `).
+
+---
+
 ## 1. Cómo el mod envía los paquetes
 
 ### 1.1 Resumen de la cadena
 
 1. **`SpotifyProcess.readSnapshot(os)`** hace una sonda del sistema operativo del jugador
    (una sola consulta por poll) y devuelve `(running, title)`:
-   - Windows: sonda nativa JNA (`Toolhelp32` + `EnumWindows`), ~10–60 ms.
-   - macOS: sonda nativa JNA/CoreGraphics (`CGWindowListCopyWindowInfo`), ~1–10 ms.
+   - Windows: sonda nativa JNA (`Toolhelp32` + `EnumWindows`), ~10–60 ms. Las ventanas se
+     identifican **por PID** (no por nombre de módulo) y el título sigue disponible con
+     Spotify **minimizado o en la bandeja** (segundo pase sobre ventanas ocultas,
+     descartando las auxiliares IME/GDI+).
+   - macOS: sonda nativa JNA/CoreGraphics (`CGWindowListCopyWindowInfo`), ~1–10 ms. Solo
+     lista ventanas en la sesión actual; el título requiere permiso de Grabación de Pantalla.
    - Linux: `playerctl` (MPRIS) como sonda principal; fallback `pgrep` + `xdotool`.
    - Todas las plataformas tienen fallback CLI si la sonda nativa no está disponible.
 2. **`SpotifyTracker`** (hilo `daemon`) consulta ese snapshot mientras el jugador está en un
@@ -113,7 +142,7 @@ payloads pequeños (~32 KB).
 | `state` | Significado | `track` |
 |---------|-------------|---------|
 | `playing` | Spotify está corriendo y hay un título legible (canción activa). La canción puede estar en pausa: el título no distingue pausa/reproducción. | El título |
-| `no_track` | Spotify está corriendo pero no se pudo leer ninguna canción (ventana oculta, permisos del SO sin otorgar, etc.). | `""` |
+| `no_track` | Spotify está corriendo pero no se pudo leer ninguna canción (permisos del SO sin otorgar, o en macOS/Linux cuando la ventana no es legible — en Windows sí se lee aunque esté en la bandeja). | `""` |
 | `closed` | Spotify no está corriendo. | `""` |
 
 ---
@@ -128,6 +157,14 @@ Registra el mismo tipo de payload (serverbound) y un receiver global:
 
 ```java
 // En el onInitialize() del plugin del servidor
+import io.netty.buffer.ByteBuf;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
+
 public static final Identifier CHANNEL = Identifier.fromNamespaceAndPath("craftify", "title");
 
 public static final Type<SpotifyTitlePayload> TYPE = new Type<>(CHANNEL);
@@ -169,16 +206,33 @@ public class SpotifyListener implements PluginMessageListener {
             return;
         }
         // El payload es: [VarInt longitud][UTF-8 JSON]
-        byte[] jsonBytes = readStringBytes(message);
-        String json = new String(jsonBytes, StandardCharsets.UTF_8);
+        int[] offset = {0};
+        int length = readVarInt(message, offset);
+        String json = new String(message, offset[0], length, StandardCharsets.UTF_8);
         handleTitle(player.getUniqueId(), json);
     }
 
-    private byte[] readStringBytes(byte[] message) {
-        int length = readVarInt(message, 0);
-        return Arrays.copyOfRange(message, varIntSize(message[0]), varIntSize(message[0]) + length);
+    // VarInt de Minecraft: 7 bits por grupo; el bit alto (0x80) indica que hay más bytes.
+    private static int readVarInt(byte[] buf, int[] offset) {
+        int value = 0;
+        int shift = 0;
+        while (offset[0] < buf.length) {
+            byte b = buf[offset[0]++];
+            value |= (b & 0x7F) << shift;
+            if ((b & 0x80) == 0) {
+                return value;
+            }
+            shift += 7;
+        }
+        throw new IllegalArgumentException("VarInt sin terminar");
     }
 }
+```
+
+Regístrate como listener en `onEnable()`:
+
+```java
+getServer().getMessenger().registerIncomingPluginChannel(this, "craftify:title", new SpotifyListener());
 ```
 
 ### 3.3 Decodificación manual (cualquier stack)
@@ -249,6 +303,10 @@ El `timestamp` es epoch millis de la captura en el cliente. Úsalo para:
 - **Permisos del SO (cliente):** en macOS leer el título de otra app requiere Grabación de
   Pantalla (con Accesibilidad como fallback vía `osascript`); en Linux se prefiere `playerctl`
   (MPRIS), con `xdotool` como respaldo.
+- **Ventana oculta por plataforma:** en Windows el título se sigue leyendo con Spotify
+  minimizado o en la bandeja (por eso el plugin seguirá recibiendo `playing` aunque el
+  jugador lo oculte). En macOS y Linux, si la ventana deja de ser legible, el mod pasa a
+  `no_track` — el plugin no debería tratar eso como "Spotify cerrado".
 - **Tamaño:** el payload es pequeño; los límites de los payloads de Fabric (`register` normal)
   no son un problema para títulos de canción.
 - **Fabric sin el tipo registrado:** el servidor Fabric descarta los payloads cuyo tipo no
