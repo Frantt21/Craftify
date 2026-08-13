@@ -58,7 +58,9 @@ Reglas de oro:
      descartando las auxiliares IME/GDI+).
    - macOS: sonda nativa JNA/CoreGraphics (`CGWindowListCopyWindowInfo`), ~1–10 ms. Solo
      lista ventanas en la sesión actual; el título requiere permiso de Grabación de Pantalla.
-   - Linux: `playerctl` (MPRIS) como sonda principal; fallback `pgrep` + `xdotool`.
+   - Linux: `playerctl` (MPRIS) como sonda principal — **el mod incluye el binario oficial de
+     playerctl dentro del JAR** (se extrae al directorio temporal del usuario, sin sudo) con
+     fallback al `playerctl` del sistema y luego `pgrep` + `xdotool`.
    - Todas las plataformas tienen fallback CLI si la sonda nativa no está disponible.
 2. **`SpotifyTracker`** (hilo `daemon`) consulta ese snapshot mientras el jugador está en un
    mundo y decide si el estado cambió.
@@ -303,9 +305,9 @@ El `timestamp` es epoch millis de la captura en el cliente. Úsalo para:
 - **Permisos del SO (cliente):** en macOS detectar el proceso no requiere permisos; para el
   título, el camino de menor fricción es el diccionario AppleScript de la propia app de
   Spotify (un único prompt de Automatización), con Grabación de Pantalla y Accesibilidad
-  como alternativas. En Linux se prefiere `playerctl` (MPRIS, sin permisos; solo hay que
-  instalarlo), con `xdotool` como respaldo. La API local de Spotify (puerto 4380) ya no
-  existe en los clientes modernos.
+  como alternativas. En Linux se usa `playerctl` (MPRIS, sin permisos) **incluido en el JAR**
+  del mod (extraído al temp del usuario, sin sudo), con `xdotool` como respaldo. La API local
+  de Spotify (puerto 4380) ya no existe en los clientes modernos.
 - **Ventana oculta por plataforma:** en Windows el título se sigue leyendo con Spotify
   minimizado o en la bandeja (por eso el plugin seguirá recibiendo `playing` aunque el
   jugador lo oculte). En macOS y Linux, si la ventana deja de ser legible, el mod pasa a

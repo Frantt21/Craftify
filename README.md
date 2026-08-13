@@ -57,13 +57,14 @@ oculta conserva el texto; solo se descartan las ventanas auxiliares IME/GDI+).
   **Grabación de Pantalla** (Ajustes → Privacidad → Grabación de pantalla) o **Accesibilidad**
   (último recurso). Con cualquiera de los tres el título se lee; sin ninguno, el estado queda
   como `no_track`.
-- **Linux**: usa **MPRIS** vía `playerctl` (p. ej. `sudo apt install playerctl`,
-  `sudo pacman -S playerctl`) como sonda principal: una sola invocación da el proceso y el
-  título, funciona con la ventana minimizada, **sin permisos** y sin depender de X11/Wayland.
-  Si `playerctl` no está instalado o no responde, cae a `pgrep` + `xdotool` (p. ej.
-  `sudo apt install xdotool`). Es lo único que hay que instalar: la API local de Spotify
-  (puerto 4380) ya no existe en los clientes modernos, así que no hay forma de evitarlo sin
-  dependencias. Spotify debe correr en la misma sesión gráfica del usuario.
+- **Linux**: usa **MPRIS** vía `playerctl` como sonda principal: una sola invocación da el
+  proceso y el título, funciona con la ventana minimizada, **sin permisos** y sin depender de
+  X11/Wayland. **No hace falta instalar nada con sudo**: el mod incluye el binario oficial de
+  playerctl (MIT, solo depende de `libglib2.0-0`) dentro del JAR y lo extrae al directorio
+  temporal del usuario la primera vez. Solo si el binario no pudiera ejecutarse, cae a
+  `pgrep` + `xdotool` (p. ej. `sudo apt install xdotool`) o al `playerctl` del sistema. La
+  API local de Spotify (puerto 4380) ya no existe en los clientes modernos. Spotify debe
+  correr en la misma sesión gráfica del usuario.
 
 ## Comandos
 
@@ -214,6 +215,13 @@ cd Craftify
 
 El JAR queda en `Craftify/build/libs/` y se instala como cualquier mod de Fabric en la
 carpeta `mods` del cliente.
+
+El binario de playerctl ya está incluido en las resources; para actualizarlo o re-fetcharlo:
+
+```bash
+cd Craftify
+bash scripts/fetch-linux-playerctl.sh
+```
 
 ## Configuración del proyecto
 

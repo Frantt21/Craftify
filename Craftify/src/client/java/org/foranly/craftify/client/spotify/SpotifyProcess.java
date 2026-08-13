@@ -1,6 +1,10 @@
 package org.foranly.craftify.client.spotify;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -161,7 +165,9 @@ public final class SpotifyProcess {
 
     private static Snapshot readLinuxSnapshot() {
         // 1) MPRIS vía playerctl: una sola invocación da running + título, sin depender de X11.
-        String mpris = firstNonBlankLine(run("playerctl", "--player=spotify", "metadata", "--format",
+        // Se usa el binario incluido en el mod (sin sudo); si no se pudo extraer, el del sistema.
+        String playerctl = playerctlBinary();
+        String mpris = firstNonBlankLine(run(playerctl, "--player=spotify", "metadata", "--format",
                 "{{ artist }} - {{ title }}"));
         if (mpris != null) {
             return new Snapshot(true, mpris);
@@ -170,6 +176,44 @@ public final class SpotifyProcess {
         boolean running = !run("pgrep", "-x", "spotify").isBlank();
         String title = running ? readLinuxWindowTitle() : null;
         return new Snapshot(running, title);
+    }
+
+    /**
+     * Resuelve el binario de playerctl en Linux: primero el incluido en el JAR del mod
+     * (extraído al directorio temporal del usuario la primera vez, sin necesitar superusuario)
+     * y, si no está disponible, el instalado en el sistema ({@code playerctl} en el PATH).
+     */
+    private static String playerctlBinary() {
+        String arch = linuxArch();
+        String resource = "/assets/craftify/native/linux/" + arch + "/playerctl";
+        try (InputStream in = SpotifyProcess.class.getResourceAsStream(resource)) {
+            if (in == null) {
+                return "playerctl";
+            }
+            File dir = new File(System.getProperty("java.io.tmpdir"), "craftify-playerctl-" + arch + "-v2.4.1");
+            File binary = new File(dir, "playerctl");
+            if (!binary.isFile()) {
+                if (!dir.mkdirs() && !dir.isDirectory()) {
+                    return "playerctl";
+                }
+                try (OutputStream out = new FileOutputStream(binary)) {
+                    in.transferTo(out);
+                }
+                binary.setExecutable(true, true);
+            }
+            return binary.getAbsolutePath();
+        } catch (IOException e) {
+            return "playerctl";
+        }
+    }
+
+    /** Arquitectura del binario playerctl incluido (x86_64 por defecto). */
+    private static String linuxArch() {
+        String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
+        if (arch.contains("aarch64") || arch.contains("arm64")) {
+            return "aarch64";
+        }
+        return "x86_64";
     }
 
     /** Título de la ventana de Spotify en Linux vía {@code xdotool}. */

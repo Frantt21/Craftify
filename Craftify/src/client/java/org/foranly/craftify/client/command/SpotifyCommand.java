@@ -106,8 +106,8 @@ public final class SpotifyCommand {
             case MACOS -> Component.literal("[Craftify] Para leer el título: acepta el aviso \"controlar Spotify\" "
                     + "cuando aparezca (una vez), o concede Grabación de Pantalla.")
                     .withStyle(ChatFormatting.GRAY);
-            case LINUX -> Component.literal("[Craftify] Sin título: instala playerctl (p. ej. sudo apt install playerctl) "
-                    + "o xdotool, y reinicia el juego.")
+            case LINUX -> Component.literal("[Craftify] Sin título: el mod incluye playerctl; como respaldo "
+                    + "instala xdotool (p. ej. sudo apt install xdotool) o playerctl del sistema.")
                     .withStyle(ChatFormatting.GRAY);
             default -> null;
         };
