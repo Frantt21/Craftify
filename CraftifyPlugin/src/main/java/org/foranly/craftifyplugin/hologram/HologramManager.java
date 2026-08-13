@@ -46,6 +46,11 @@ public final class HologramManager {
         this.scale = (float) plugin.getConfig().getDouble("hologram.scale", 0.6);
     }
 
+    /** Whether the hologram mode is enabled in the config. */
+    public boolean isEnabled() {
+        return enabled;
+    }
+
     /** Starts the task that keeps the holograms above their players. */
     public void start() {
         if (!enabled) {

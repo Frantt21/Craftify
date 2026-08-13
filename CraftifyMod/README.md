@@ -8,7 +8,7 @@ The title is sent to the server over the `craftify:title` channel, where the
 [**CraftifyPlugin**](../CraftifyPlugin/README.md) (Paper) receives and displays it. The
 communication contract is in [`../PROTOCOL.md`](../PROTOCOL.md).
 
-> ⚠️ **This is the client component.** It does nothing visible without a server receiving
+> **Note: this is the client component.** It does nothing visible without a server receiving
 > the channel, but it includes the `/craftify spotify` command to verify detection in
 > singleplayer.
 

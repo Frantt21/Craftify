@@ -6,6 +6,8 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.foranly.craftifyplugin.hologram.HologramManager;
 import org.foranly.craftifyplugin.nametag.NametagManager;
 
+import java.util.UUID;
+
 /** Clears the state and the display when the player disconnects (PROTOCOL.md §4.1). */
 public final class PlayerListener implements Listener {
 
@@ -22,8 +24,9 @@ public final class PlayerListener implements Listener {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        stateManager.remove(event.getPlayer().getUniqueId());
-        nametags.reset(event.getPlayer());
-        holograms.remove(event.getPlayer().getUniqueId());
+        UUID uuid = event.getPlayer().getUniqueId();
+        stateManager.remove(uuid);
+        nametags.remove(uuid);
+        holograms.remove(uuid);
     }
 }

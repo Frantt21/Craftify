@@ -1,18 +1,21 @@
 # How to show the player's song on the server.
 
 # --- Nametag mode (recommended) -------------------------------------------------
-# Shows the title in the player's floating name (the nametag above the head).
-# Advantage: it is part of the player's entity, so it follows them without lag.
+# Shows the song next to the player's floating name using scoreboard teams
+# (prefix + name + suffix). It is part of the player's entity, so it follows them
+# without lag. Note: vanilla renders player name tags on a single line and ignores
+# the custom name for players, so the song is appended as a team suffix.
 # The owner of the name sees it in third person (F5) if the client mod includes the
 # "see your own name" mixin (by default Minecraft does not show it).
 nametag:
   # Enables/disables the nametag.
   enabled: true
-  # Nametag format (Adventure MiniMessage). Placeholders:
+  # Text shown BEFORE the player name (Adventure MiniMessage). Placeholders:
   #   {name}  → player name
   #   {track} → "Song - Artist"
-  # <newline> creates a second line.
-  format: "<yellow>{name}</yellow><newline><green>♪ </green><white>{track}</white>"
+  prefix: ""
+  # Text shown AFTER the player name (Adventure MiniMessage).
+  suffix: " <green>♪ </green><white>{track}</white>"
 
 # --- Hologram mode (optional) ---------------------------------------------------
 # A TextDisplay entity that follows the player. It works, but being a separate entity

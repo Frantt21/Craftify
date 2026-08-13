@@ -23,7 +23,7 @@ the network, and how the plugin must receive and use them.
 
 ---
 
-## ⚡ Quick reference for the plugin
+## Quick reference for the plugin
 
 | What | Value |
 |-----|-------|

@@ -1,11 +1,14 @@
 package org.foranly.craftifyplugin;
 
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 import org.foranly.craftifyplugin.hologram.HologramManager;
 import org.foranly.craftifyplugin.nametag.NametagManager;
 
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import java.util.logging.Logger;
 
 /**
@@ -13,16 +16,21 @@ import java.util.logging.Logger;
  *
  * <p>On-wire payload: {@code [VarInt length][UTF-8 bytes of the JSON]}
  * (PROTOCOL.md §2.1). It is decoded manually so it does not depend on the mod.
+ *
+ * <p>The listener runs on the netty thread, so the display updates (entity operations) are
+ * scheduled on the main server thread.
  */
 public final class SpotifyListener implements PluginMessageListener {
 
+    private final Plugin plugin;
     private final SpotifyStateManager stateManager;
     private final HologramManager holograms;
     private final NametagManager nametags;
     private final Logger logger;
 
-    public SpotifyListener(SpotifyStateManager stateManager, HologramManager holograms,
+    public SpotifyListener(Plugin plugin, SpotifyStateManager stateManager, HologramManager holograms,
                            NametagManager nametags, Logger logger) {
+        this.plugin = plugin;
         this.stateManager = stateManager;
         this.holograms = holograms;
         this.nametags = nametags;
@@ -54,10 +62,19 @@ public final class SpotifyListener implements PluginMessageListener {
             return;
         }
 
-        stateManager.update(player.getUniqueId(), state);
-        nametags.update(player, state);
-        holograms.update(player, state);
+        UUID uuid = player.getUniqueId();
+        stateManager.update(uuid, state);
         logger.fine(player.getName() + " → " + state);
+
+        // Entity operations must run on the main thread (this listener runs on netty).
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            Player online = Bukkit.getPlayer(uuid);
+            if (online == null || !online.isOnline()) {
+                return;
+            }
+            nametags.update(online, state);
+            holograms.update(online, state);
+        });
     }
 
     /**

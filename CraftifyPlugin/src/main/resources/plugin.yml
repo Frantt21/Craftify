@@ -10,7 +10,14 @@ commands:
     description: Shows the player's current Spotify state.
     usage: /nowplaying
     permission: craftifyplugin.nowplaying
+  craftifyplugin:
+    description: Reloads the CraftifyPlugin configuration.
+    usage: /craftifyplugin reload
+    permission: craftifyplugin.reload
 permissions:
   craftifyplugin.nowplaying:
     description: Allows viewing your own Spotify state.
     default: true
+  craftifyplugin.reload:
+    description: Allows reloading the CraftifyPlugin configuration.
+    default: op
