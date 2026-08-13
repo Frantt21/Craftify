@@ -6,31 +6,31 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Último estado de Spotify por jugador (PROTOCOL.md §4.1).
+ * Latest Spotify state per player (PROTOCOL.md §4.1).
  *
- * <p>El mod solo envía cuando el estado cambia, así que el último paquete recibido ES el
- * estado actual del jugador.
+ * <p>The mod only sends when the state changes, so the last received packet IS the player's
+ * current state.
  */
 public final class SpotifyStateManager {
 
     private final Map<UUID, PlayerSpotifyState> byPlayer = new ConcurrentHashMap<>();
 
-    /** Guarda (o reemplaza) el estado de un jugador. */
+    /** Stores (or replaces) a player's state. */
     public void update(UUID player, PlayerSpotifyState state) {
         byPlayer.put(player, state);
     }
 
-    /** Devuelve el último estado conocido del jugador, si existe. */
+    /** Returns the player's latest known state, if any. */
     public Optional<PlayerSpotifyState> get(UUID player) {
         return Optional.ofNullable(byPlayer.get(player));
     }
 
-    /** Elimina el estado de un jugador (p. ej. al desconectar). */
+    /** Removes a player's state (e.g. on disconnect). */
     public void remove(UUID player) {
         byPlayer.remove(player);
     }
 
-    /** Cantidad de jugadores con estado conocido. */
+    /** Number of players with a known state. */
     public int size() {
         return byPlayer.size();
     }

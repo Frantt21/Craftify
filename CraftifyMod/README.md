@@ -1,169 +1,167 @@
 # CraftifyMod
 
-Mod de Minecraft (Fabric, **solo cliente**) que detecta el **título de la canción que está
-sonando en Spotify** leyendo el título de la ventana del proceso de Spotify que corre en el
-sistema operativo del jugador.
+Minecraft mod (Fabric, **client-only**) that detects the **song title currently playing on
+Spotify** by reading the window title of the Spotify process running on the player's
+operating system.
 
-Ese título se envía al servidor por el canal `craftify:title`, donde el
-[**CraftifyPlugin**](../CraftifyPlugin/README.md) (Paper) lo recibe y lo expone. El
-contrato de comunicación está en [`../PROTOCOL.md`](../PROTOCOL.md).
+The title is sent to the server over the `craftify:title` channel, where the
+[**CraftifyPlugin**](../CraftifyPlugin/README.md) (Paper) receives and displays it. The
+communication contract is in [`../PROTOCOL.md`](../PROTOCOL.md).
 
-> ⚠️ **Este es el componente de cliente.** No hace nada visible sin un servidor que reciba
-> el canal, pero incluye el comando `/craftify spotify` para verificar la detección en
+> ⚠️ **This is the client component.** It does nothing visible without a server receiving
+> the channel, but it includes the `/craftify spotify` command to verify detection in
 > singleplayer.
 
-## Detección de Spotify
+## Spotify detection
 
-El mod detecta el proceso de Spotify que está corriendo en el SO del jugador y lee el
-título de su ventana, que cambia con cada canción (formato típico: `Canción - Artista`).
-En Windows el título se sigue leyendo aunque Spotify esté **minimizado o en la bandeja**
-(la ventana oculta conserva el texto; solo se descartan las ventanas auxiliares IME/GDI+).
+The mod detects the Spotify process running on the player's OS and reads its window title,
+which changes with each song (typically `Song - Artist`). On Windows the title keeps being
+read even when Spotify is **minimized or in the tray** (the hidden window keeps its text;
+only auxiliary IME/GDI+ windows are skipped).
 
-### Ejecutables soportados (uno por SO)
+### Supported executables (one per OS)
 
-| SO      | Ejecutable    | Detección del proceso        | Lectura del título |
+| OS      | Executable    | Process detection        | Title reading |
 |---------|---------------|------------------------------|--------------------|
-| Windows | `Spotify.exe` | JNA/Win32 (Toolhelp32) con fallback `tasklist` | JNA/Win32 (`EnumWindows` + `GetWindowText`) con fallback PowerShell |
-| macOS   | `Spotify`     | JNA/CoreGraphics (dueño de la ventana) con fallback `pgrep` | JNA/CoreGraphics → AppleScript de Spotify (Automatización) → `osascript` |
-| Linux   | `spotify`     | MPRIS/`playerctl` (implica corriendo); fallback `pgrep -x spotify` | MPRIS/`playerctl` (metadata) con fallback `xdotool` (ventana) |
+| Windows | `Spotify.exe` | JNA/Win32 (Toolhelp32) with `tasklist` fallback | JNA/Win32 (`EnumWindows` + `GetWindowText`) with PowerShell fallback |
+| macOS   | `Spotify`     | JNA/CoreGraphics (window owner) with `pgrep` fallback | JNA/CoreGraphics → Spotify AppleScript (Automation) → `osascript` |
+| Linux   | `spotify`     | MPRIS/`playerctl` (implies running); `pgrep -x spotify` fallback | MPRIS/`playerctl` (metadata) with `xdotool` fallback (window) |
 
-### Requisitos por sistema operativo
+### Requirements per OS
 
-- **Windows**: usa una sonda nativa (JNA/Win32) sin permisos adicionales; PowerShell solo se
-  usa como fallback si JNA no está disponible.
-- **macOS**: detectar el proceso no requiere permisos. Para el **título**, el camino más
-  fácil es aceptar el aviso único **"controlar Spotify"** (Automatización) cuando aparezca
-  al entrar al juego — un clic, sin salir a Ajustes. Alternativas si se prefiere: permiso de
-  **Grabación de Pantalla** (Ajustes → Privacidad → Grabación de pantalla) o **Accesibilidad**
-  (último recurso). Con cualquiera de los tres el título se lee; sin ninguno, el estado queda
-  como `no_track`.
-- **Linux**: usa **MPRIS** vía `playerctl` como sonda principal: una sola invocación da el
-  proceso y el título, funciona con la ventana minimizada, **sin permisos** y sin depender de
-  X11/Wayland. **No hace falta instalar nada con sudo**: el mod incluye el binario oficial de
-  playerctl (MIT, solo depende de `libglib2.0-0`) dentro del JAR y lo extrae al directorio
-  temporal del usuario la primera vez. Solo si el binario no pudiera ejecutarse, cae a
-  `pgrep` + `xdotool` (p. ej. `sudo apt install xdotool`) o al `playerctl` del sistema. La
-  API local de Spotify (puerto 4380) ya no existe en los clientes modernos. Spotify debe
-  correr en la misma sesión gráfica del usuario.
+- **Windows**: uses a native probe (JNA/Win32) without extra permissions; PowerShell is
+  only used as a fallback if JNA is unavailable.
+- **macOS**: detecting the process needs no permissions. For the **title**, the easiest
+  path is accepting the one-time **"control Spotify"** (Automation) prompt when it appears
+  when you join the game — one click, no need to open System Settings. Alternatives if you
+  prefer: the **Screen Recording** permission (System Settings → Privacy & Security →
+  Screen Recording) or **Accessibility** (last resort). With any of the three the title is
+  read; without any, the state stays `no_track`.
+- **Linux**: uses **MPRIS** via `playerctl` as the main probe: a single invocation gives
+  process + title, works with the window minimized, **no permissions** and no X11/Wayland
+  dependency. **You don't need to install anything with sudo**: the mod bundles the
+  official playerctl binary (MIT, only depends on `libglib2.0-0`) inside the JAR and
+  extracts it to the user's temp directory on first use. Only if that binary can't run does
+  it fall back to `pgrep` + `xdotool` (e.g. `sudo apt install xdotool`) or the system
+  `playerctl`. Spotify's local API (port 4380) no longer exists on modern clients. Spotify
+  must run in the same graphical session as the user.
 
-## Comandos
+## Commands
 
-Dentro del juego (mundo singleplayer o conectado a un servidor):
+In-game (singleplayer world or connected to a server):
 
 ```
 /craftify spotify
 /craftify send on|off|toggle
 ```
 
-### `/craftify spotify` — estado y verificación
+### `/craftify spotify` — status and verification
 
-Muestra:
+Shows:
 
-1. El sistema operativo detectado.
-2. Si el proceso de Spotify está corriendo (y con qué ejecutable).
-3. El estado actual (reproduciendo / sin canción activa / cerrado) y el título.
-4. Si el envío de paquetes está activo, pausado o inactivo.
+1. The detected operating system.
+2. Whether the Spotify process is running (and with which executable).
+3. The current state (playing / no active song / closed) and the title.
+4. Whether packet sending is active, paused or inactive.
 
-Salida de ejemplo:
+Example output:
 
 ```
-[Craftify] Sistema operativo: WINDOWS
-[Craftify] Proceso de Spotify (Spotify.exe): corriendo
-[Craftify] Estado: reproduciendo (playing)
-[Craftify] Título actual: Mi Canción Favorita - Mi Artista
-[Craftify] Envío de paquetes: activo (detección en tiempo real de cambios de canción)
+[Craftify] Operating system: WINDOWS
+[Craftify] Spotify process (Spotify.exe): running
+[Craftify] State: playing
+[Craftify] Current title: My Favorite Song - My Artist
+[Craftify] Packet sending: active (real-time song change detection)
 ```
 
-Si el proceso no está corriendo o el título no se pudo leer, el comando lo indica con un
-mensaje en rojo, y según la plataforma sugiere qué hacer (aceptar el aviso de
-Automatización en macOS, instalar `playerctl`/`xdotool` en Linux, etc.).
+If the process is not running or the title could not be read, the command says so in red
+and, depending on the platform, suggests what to do (accept the Automation prompt on
+macOS, install `playerctl`/`xdotool` on Linux, etc.).
 
-### `/craftify send` — pausar/reanudar el envío de paquetes
+### `/craftify send` — pause/resume packet sending
 
-- `/craftify send off` pausa el envío (el seguimiento sigue leyendo, pero no envía paquetes).
-- `/craftify send on` lo reanuda y **envía el estado actual de Spotify en la próxima lectura**.
-- `/craftify send toggle` alterna entre ambos.
+- `/craftify send off` pauses sending (tracking keeps reading, but no packets are sent).
+- `/craftify send on` resumes it and **sends the current Spotify state on the next read**.
+- `/craftify send toggle` switches between both.
 
-El estado de pausa persiste entre mundos (solo se pierde al cerrar el juego). El comando
-`/craftify spotify` refleja si el envío está pausado.
+The pause state persists between worlds (only lost when closing the game). The
+`/craftify spotify` command reflects whether sending is paused.
 
-## Ver tu propio nombre en tercera persona (F5)
+## See your own name in third person (F5)
 
-Por defecto Minecraft **no muestra el nametag del propio jugador** ni en primera ni en
-tercera persona: el cliente lo oculta porque el jugador local coincide con la cámara
-(`entity == minecraft.getCameraEntity()` en `LivingEntityRenderer#shouldShowName`).
+By default Minecraft does **not show the player's own nametag** in first or third person:
+the client hides it because the local player matches the camera
+(`entity == minecraft.getCameraEntity()` in `LivingEntityRenderer#shouldShowName`).
 
-El mod lo habilita: con la cámara en tercera persona (F5), verás tu **propio nombre**
-flotando sobre tu cabeza — y, si el servidor tiene el plugin con el modo nametag, también
-la canción que estás escuchando (el plugin usa `customName`, que el mixin muestra).
+The mod enables it: with the camera in third person (F5), you will see your **own name**
+floating above your head — and, if the server runs the plugin in nametag mode, also the
+song you're listening to (the plugin uses `customName`, which the mixin displays).
 
-- Implementación: mixin `LivingEntityRendererMixin` (registrado en
-  `craftify.client.mixins.json`), inyectado en `shouldShowName`.
-- Se activa solo mirándote a ti mismo en tercera persona: no afecta a primera persona ni
-  al espectar a otros jugadores, y respeta el estado de HUD oculto (F1).
+- Implementation: `LivingEntityRendererMixin` (registered in
+  `craftify.client.mixins.json`), injected into `shouldShowName`.
+- It only activates when looking at yourself in third person: it does not affect first
+  person or spectating other players, and it respects the hidden HUD (F1) state.
 
-## Envío de paquetes
+## Packet sending
 
-Mientras el jugador está en un mundo (singleplayer o conectado a un servidor), un hilo aparte
-lee el estado de Spotify con un **polling adaptativo** y envía el paquete `craftify:title` al
-servidor **solo cuando el estado cambia** (no en bucle):
+While the player is in a world (singleplayer or connected to a server), a separate thread
+reads the Spotify state with **adaptive polling** and sends the `craftify:title` packet to
+the server **only when the state changes** (not in a loop):
 
-- **cada ~0,5 segundos** mientras Spotify está corriendo → cambios de canción detectados
-  casi en tiempo real;
-- **cada ~5 segundos** (backoff) cuando Spotify está cerrado, para no gastar recursos en
-  vano;
-- al entrar al mundo se envía el estado inicial;
-- cada cambio de canción envía `state: "playing"` con el nuevo título;
-- si Spotify está corriendo pero no hay canción legible se envía `state: "no_track"`;
-- cuando Spotify se cierra se envía `state: "closed"`.
+- **every ~0.5 s** while Spotify is running → near real-time song changes;
+- **every ~5 s** (backoff) when Spotify is closed, to avoid wasting resources;
+- joining a world sends the initial state;
+- every song change sends `state: "playing"` with the new title;
+- if Spotify is running but no song is readable, it sends `state: "no_track"`;
+- when Spotify closes, it sends `state: "closed"`.
 
-El envío se puede **pausar y reanudar** con [`/craftify send`](#craftify-send--pausarreanudar-el-envío-de-paquetes).
+Sending can be **paused and resumed** with [`/craftify send`](#craftify-send--pauseresume-packet-sending).
 
-El seguimiento arranca con `ClientPlayConnectionEvents.JOIN` y se detiene con
-`DISCONNECT`. La lectura del SO se hace en un hilo `daemon` para no bloquear el render.
+Tracking starts with `ClientPlayConnectionEvents.JOIN` and stops on
+`DISCONNECT`. OS reads happen on a `daemon` thread so rendering is never blocked.
 
-### Costo de la detección
+### Detection cost
 
-El costo de cada consulta fue medido (Windows 11, Java 26):
+The cost of each query was measured (Windows 11, Java 26):
 
-| Sonda | Costo por consulta |
+| Probe | Cost per query |
 |-------|--------------------|
-| `tasklist` (proceso) | ~110 ms |
-| PowerShell (`MainWindowTitle`) | ~1.100 ms |
-| Poll anterior en Windows (tasklist + PowerShell) | ~1.060 ms |
-| **Poll actual en Windows (JNA/Win32)** | **~10–60 ms** (la primera carga del nativo ~500 ms) |
-| `osascript` (título, macOS) | ~200–500 ms |
-| **Poll actual en macOS (JNA/CoreGraphics)** | **~1–10 ms** (solo el título requiere permiso de Grabación de Pantalla) |
-| Poll en Linux (`playerctl` o `pgrep` + `xdotool`) | ~10–80 ms (procesos ligeros del SO) |
+| `tasklist` (process) | ~110 ms |
+| PowerShell (`MainWindowTitle`) | ~1,100 ms |
+| Old Windows poll (tasklist + PowerShell) | ~1,060 ms |
+| **Current Windows poll (JNA/Win32)** | **~10–60 ms** (first native load ~500 ms) |
+| `osascript` (title, macOS) | ~200–500 ms |
+| **Current macOS poll (JNA/CoreGraphics)** | **~1–10 ms** (only the title needs Screen Recording) |
+| Linux poll (`playerctl` or `pgrep` + `xdotool`) | ~10–80 ms (light OS processes) |
 
-El cuello de botella era el **arranque de PowerShell** (~1,1 s por invocación) en Windows y
-el **arranque de AppleScript** (~200–500 ms) en macOS. Por eso el mod usa **sondas nativas
-con JNA** en ambos: `Toolhelp32` + `EnumWindows` en Windows, `CGWindowListCopyWindowInfo` en
-macOS — del orden de milisegundos. Si JNA no está disponible, vuelve al fallback CLI (lento
-pero funcional). En Linux los procesos del SO ya son ligeros, así que la sonda usa `playerctl`
-(MPRIS) como método principal y `xdotool` como respaldo.
+The bottleneck was **PowerShell startup** (~1.1 s per invocation) on Windows and
+**AppleScript startup** (~200–500 ms) on macOS. That's why the mod uses **native JNA
+probes** on both: `Toolhelp32` + `EnumWindows` on Windows, `CGWindowListCopyWindowInfo` on
+macOS — on the order of milliseconds. If JNA is unavailable, it falls back to the CLI
+(slow but functional). On Linux the OS processes are already light, so the probe uses
+`playerctl` (MPRIS) as the main method and `xdotool` as a backup.
 
-Con el intervalo de 500 ms, cada ciclo efectivo dura ~0,5–0,6 s en cualquier plataforma, con
-un costo de CPU despreciable.
+With the 500 ms interval, each effective cycle lasts ~0.5–0.6 s on any platform, with
+negligible CPU cost.
 
-## Compilación
+## Build
 
 ```bash
 cd CraftifyMod
 ./gradlew build
 ```
 
-El JAR queda en `CraftifyMod/build/libs/CraftifyMod-1.0.0.jar` y se instala como cualquier
-mod de Fabric en la carpeta `mods` del cliente.
+The JAR ends up in `CraftifyMod/build/libs/CraftifyMod-1.0.0.jar` and installs like any
+Fabric mod in the client's `mods` folder.
 
-El binario de playerctl ya está incluido en las resources; para actualizarlo o re-fetcharlo:
+The playerctl binary is already bundled in the resources; to update or re-fetch it:
 
 ```bash
 cd CraftifyMod
 bash scripts/fetch-linux-playerctl.sh
 ```
 
-## Configuración del proyecto
+## Project configuration
 
 - group: mod
 - template: fabric
@@ -178,7 +176,7 @@ bash scripts/fetch-linux-playerctl.sh
 - mod name: craftify
 - mod version: 1.0.0
 - main class: org.foranly.craftify.Craftify
-- entrypoint de cliente: org.foranly.craftify.client.CraftifyClient
+- client entrypoint: org.foranly.craftify.client.CraftifyClient
 
 - group id: org.foranly
 - artifact id: CraftifyMod

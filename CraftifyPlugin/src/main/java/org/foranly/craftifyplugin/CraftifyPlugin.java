@@ -7,14 +7,14 @@ import org.foranly.craftifyplugin.hologram.HologramManager;
 import org.foranly.craftifyplugin.nametag.NametagManager;
 
 /**
- * Plugin Paper que recibe el canal {@code craftify:title} enviado por el mod Craftify
- * (cliente) y guarda el estado de Spotify de cada jugador.
+ * Paper plugin that receives the {@code craftify:title} channel sent by the Craftify mod
+ * (client) and stores each player's Spotify state.
  *
- * <p>Contrato completo: ver {@code PROTOCOL.md} en la raíz del repositorio.
+ * <p>Full contract: see {@code PROTOCOL.md} at the repository root.
  */
 public final class CraftifyPlugin extends JavaPlugin {
 
-    /** Canal del protocolo (PROTOCOL.md §2). */
+    /** Protocol channel (PROTOCOL.md §2). */
     public static final String CHANNEL = "craftify:title";
 
     private SpotifyStateManager stateManager;
@@ -28,23 +28,23 @@ public final class CraftifyPlugin extends JavaPlugin {
         holograms = new HologramManager(this);
         holograms.start();
 
-        // Recibir C→S: el payload llega como minecraft:custom_payload (PROTOCOL.md §3.2).
+        // Receive C→S: the payload arrives as minecraft:custom_payload (PROTOCOL.md §3.2).
         getServer().getMessenger().registerIncomingPluginChannel(this, CHANNEL,
                 new SpotifyListener(stateManager, holograms, nametags, getLogger()));
 
-        // Limpiar el estado y la visualización al desconectar (PROTOCOL.md §4.1).
+        // Clear the state and the display on disconnect (PROTOCOL.md §4.1).
         getServer().getPluginManager().registerEvents(new PlayerListener(stateManager, holograms, nametags), this);
 
-        // Verificación: /nowplaying
+        // Verification: /nowplaying
         getCommand("nowplaying").setExecutor(new NowPlayingCommand(stateManager));
 
-        getLogger().info("CraftifyPlugin habilitado — escuchando el canal " + CHANNEL);
+        getLogger().info("CraftifyPlugin enabled — listening on channel " + CHANNEL);
     }
 
     @Override
     public void onDisable() {
         getServer().getMessenger().unregisterIncomingPluginChannel(this);
-        // Restaurar los nametags modificados antes de apagar.
+        // Restore any modified nametags before shutting down.
         if (nametags != null) {
             getServer().getOnlinePlayers().forEach(nametags::reset);
         }
@@ -54,7 +54,7 @@ public final class CraftifyPlugin extends JavaPlugin {
         stateManager = null;
     }
 
-    /** Acceso al estado por si otro componente del plugin lo necesita. */
+    /** State access, in case another plugin component needs it. */
     public SpotifyStateManager getStateManager() {
         return stateManager;
     }

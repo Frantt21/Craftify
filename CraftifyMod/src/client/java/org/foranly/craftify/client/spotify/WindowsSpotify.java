@@ -17,23 +17,23 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Sonda nativa (JNA/Win32) para Windows: detecta Spotify.exe y lee el título de su ventana
- * sin lanzar procesos externos.
+ * Native (JNA/Win32) probe for Windows: detects Spotify.exe and reads its window title
+ * without spawning external processes.
  *
- * <p>Reemplaza a {@code tasklist} + PowerShell, que tardaban ~1,1 s por consulta (el arranque
- * de PowerShell domina el costo) y hacían impracticable un polling rápido. Dos llamadas
- * nativas del orden de milisegundos en total:
+ * <p>Replaces {@code tasklist} + PowerShell, which took ~1.1 s per query (PowerShell
+ * startup dominates the cost) and made fast polling impractical. Two native calls on the
+ * order of milliseconds in total:
  *
  * <ol>
- *   <li>Toolhelp32: PIDs de los procesos {@code Spotify.exe} (funciona aunque Spotify esté
- *       minimizado a la bandeja, sin ventana).</li>
- *   <li>EnumWindows: busca una ventana visible cuyo PID pertenezca a Spotify y lee su título
- *       con {@code GetWindowText}.</li>
+ *   <li>Toolhelp32: PIDs of the {@code Spotify.exe} processes (works even when Spotify is
+ *       minimized to the tray, with no window).</li>
+ *   <li>EnumWindows: looks for a visible window whose PID belongs to Spotify and reads its
+ *       title with {@code GetWindowText}.</li>
  * </ol>
  *
- * <p><b>Importante:</b> la ventana se identifica por PID ({@code GetWindowThreadProcessId})
- * y <b>no</b> por {@code GetWindowModuleFileName}: esa función devuelve 0 para muchas
- * ventanas (incluidas las de Spotify) y hacía que el título nunca se leyera.
+ * <p><b>Important:</b> the window is identified by PID ({@code GetWindowThreadProcessId})
+ * and <b>not</b> by {@code GetWindowModuleFileName}: that function returns 0 for many
+ * windows (including Spotify's) and made the title never get read.
  */
 public final class WindowsSpotify {
 
@@ -43,10 +43,10 @@ public final class WindowsSpotify {
     }
 
     /**
-     * Estado leído con una sola sonda nativa.
+     * State read with a single native probe.
      *
-     * @throws com.sun.jna.UnsatisfiedLinkError u otro {@link Error} si JNA no está disponible;
-     *         el llamador debe volver al CLI en ese caso
+     * @throws com.sun.jna.UnsatisfiedLinkError or another {@link Error} if JNA is not
+     *         available; the caller must fall back to the CLI in that case
      */
     public static SpotifyProcess.Snapshot read() {
         Set<Integer> pids = spotifyPids();
@@ -54,7 +54,7 @@ public final class WindowsSpotify {
         return new SpotifyProcess.Snapshot(running, running ? windowTitle(pids) : null);
     }
 
-    // --- Toolhelp32: PIDs de Spotify.exe ---
+    // --- Toolhelp32: Spotify.exe PIDs ---
 
     private static Set<Integer> spotifyPids() {
         Set<Integer> pids = new HashSet<>();
@@ -81,17 +81,17 @@ public final class WindowsSpotify {
         }
     }
 
-    // --- User32: título de la ventana (por PID) ---
+    // --- User32: window title (by PID) ---
 
     private static String windowTitle(Set<Integer> spotifyPids) {
-        // 1er pase: ventanas visibles (el título principal suele estar aquí).
+        // 1st pass: visible windows (the main title is usually here).
         String title = windowTitlePass(spotifyPids, true);
         if (title != null) {
             return title;
         }
-        // 2do pase: todas las ventanas de Spotify. Cuando Spotify se oculta a la bandeja la
-        // ventana deja de ser visible pero conserva el texto del título (GetWindowText sigue
-        // funcionando); solo hay que descartar las ventanas auxiliares (IME, GDI+).
+        // 2nd pass: all Spotify windows. When Spotify hides to the tray the window stops
+        // being visible but keeps its title text (GetWindowText still works); only the
+        // auxiliary windows (IME, GDI+) need to be skipped.
         return windowTitlePass(spotifyPids, false);
     }
 
@@ -112,7 +112,7 @@ public final class WindowsSpotify {
                 String candidate = new String(buffer, 0, length);
                 if (!isAuxiliaryWindow(candidate)) {
                     found[0] = candidate;
-                    return false; // detener la enumeración
+                    return false; // stop the enumeration
                 }
             }
             return true;
@@ -120,7 +120,7 @@ public final class WindowsSpotify {
         return found[0];
     }
 
-    /** Ventanas auxiliares de Spotify (IME, GDI+) que no son la ventana principal. */
+    /** Spotify auxiliary windows (IME, GDI+) that are not the main window. */
     private static boolean isAuxiliaryWindow(String title) {
         String lower = title.toLowerCase(Locale.ROOT);
         return lower.contains("default ime")
@@ -137,7 +137,7 @@ public final class WindowsSpotify {
         return chars.length;
     }
 
-    /** Declaración mínima de Toolhelp32 (jna-platform no la incluye). */
+    /** Minimal Toolhelp32 declaration (not included in jna-platform). */
     private interface TlHelp32 extends StdCallLibrary {
         TlHelp32 INSTANCE = Native.load("kernel32", TlHelp32.class);
 
@@ -147,7 +147,7 @@ public final class WindowsSpotify {
 
         boolean Process32NextW(WinNT.HANDLE hSnapshot, PROCESSENTRY32W lppe);
 
-        /** Estructura {@code PROCESSENTRY32W}: entrada del snapshot de procesos. */
+        /** {@code PROCESSENTRY32W} structure: process snapshot entry. */
         class PROCESSENTRY32W extends Structure {
             public int dwSize;
             public int cntUsage;

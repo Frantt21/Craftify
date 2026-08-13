@@ -1,29 +1,29 @@
-# Cómo mostrar la canción del jugador en el servidor.
+# How to show the player's song on the server.
 
-# --- Modo nametag (recomendado) ------------------------------------------------
-# Muestra el título en el nombre flotante del jugador (el nametag sobre la cabeza).
-# Ventaja: es parte de la entidad del jugador, así que lo sigue sin lag.
-# El jugador dueño del nombre lo ve en tercera persona (F5) si el mod del cliente
-# incluye el mixin de "ver tu propio nombre" (por defecto Minecraft no lo muestra).
+# --- Nametag mode (recommended) -------------------------------------------------
+# Shows the title in the player's floating name (the nametag above the head).
+# Advantage: it is part of the player's entity, so it follows them without lag.
+# The owner of the name sees it in third person (F5) if the client mod includes the
+# "see your own name" mixin (by default Minecraft does not show it).
 nametag:
-  # Activa/desactiva el nametag.
+  # Enables/disables the nametag.
   enabled: true
-  # Formato del nametag (MiniMessage de Adventure). Placeholders:
-  #   {name}  → nombre del jugador
-  #   {track} → "Canción - Artista"
-  # <newline> crea una segunda línea.
+  # Nametag format (Adventure MiniMessage). Placeholders:
+  #   {name}  → player name
+  #   {track} → "Song - Artist"
+  # <newline> creates a second line.
   format: "<yellow>{name}</yellow><newline><green>♪ </green><white>{track}</white>"
 
-# --- Modo holograma (opcional) -------------------------------------------------
-# Entidad TextDisplay que sigue al jugador. Funciona, pero al ser una entidad aparte
-# que se teletransporta por tick puede notarse un pequeño retraso al moverse.
+# --- Hologram mode (optional) ---------------------------------------------------
+# A TextDisplay entity that follows the player. It works, but being a separate entity
+# that teleports every tick, a small delay can be noticed when moving.
 hologram:
-  # Activa/desactiva el holograma.
+  # Enables/disables the hologram.
   enabled: false
-  # Glifo del icono de música (fuente por defecto de Minecraft). Si no se ve bien,
-  # probar "♫ " (U+266B) u otro.
+  # Music icon glyph (Minecraft's default font). If it doesn't render well,
+  # try "♫ " (U+266B) or another.
   icon: "♪ "
-  # Altura sobre el jugador, en bloques.
+  # Height above the player, in blocks.
   height: 2.15
-  # Tamaño del texto (escala de la entidad TextDisplay).
+  # Text size (TextDisplay entity scale).
   scale: 0.6

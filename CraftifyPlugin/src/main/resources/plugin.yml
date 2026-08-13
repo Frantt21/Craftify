@@ -2,15 +2,15 @@ name: CraftifyPlugin
 version: 1.0.0
 main: org.foranly.craftifyplugin.CraftifyPlugin
 api-version: '1.21'
-description: Recibe el estado de Spotify de los jugadores (mod Craftify) y lo expone.
+description: Receives players' Spotify state (Craftify mod) and displays it.
 authors:
   - foranly
 commands:
   nowplaying:
-    description: Muestra el estado actual de Spotify del jugador.
+    description: Shows the player's current Spotify state.
     usage: /nowplaying
     permission: craftifyplugin.nowplaying
 permissions:
   craftifyplugin.nowplaying:
-    description: Permite ver el estado de Spotify propio.
+    description: Allows viewing your own Spotify state.
     default: true

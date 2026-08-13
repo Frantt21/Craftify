@@ -10,8 +10,8 @@ import org.foranly.craftify.client.spotify.SpotifyProcess;
 import org.foranly.craftify.client.spotify.SpotifyTracker;
 
 /**
- * Comando {@code /craftify spotify}: verifica que el mod detecte correctamente el
- * proceso de Spotify y lea el título de su ventana en el sistema operativo actual.
+ * {@code /craftify spotify} command: verifies that the mod correctly detects the Spotify
+ * process and reads its window title on the current operating system.
  */
 public final class SpotifyCommand {
 
@@ -35,14 +35,14 @@ public final class SpotifyCommand {
         SpotifyTracker.setPaused(paused);
         FabricClientCommandSource source = context.getSource();
         if (paused) {
-            source.sendFeedback(Component.literal("[Craftify] Envío de paquetes pausado.")
+            source.sendFeedback(Component.literal("[Craftify] Packet sending paused.")
                     .withStyle(ChatFormatting.YELLOW));
-            source.sendFeedback(Component.literal("[Craftify] Usa /craftify send on para reanudar.")
+            source.sendFeedback(Component.literal("[Craftify] Use /craftify send on to resume.")
                     .withStyle(ChatFormatting.GRAY));
         } else {
-            source.sendFeedback(Component.literal("[Craftify] Envío de paquetes reanudado.")
+            source.sendFeedback(Component.literal("[Craftify] Packet sending resumed.")
                     .withStyle(ChatFormatting.GREEN));
-            source.sendFeedback(Component.literal("[Craftify] El estado actual de Spotify se enviará en la próxima lectura.")
+            source.sendFeedback(Component.literal("[Craftify] The current Spotify state will be sent on the next read.")
                     .withStyle(ChatFormatting.GRAY));
         }
         return 1;
@@ -52,62 +52,62 @@ public final class SpotifyCommand {
         FabricClientCommandSource source = context.getSource();
         SpotifyProcess.Os os = SpotifyProcess.currentOs();
 
-        source.sendFeedback(Component.literal("[Craftify] Sistema operativo: ")
+        source.sendFeedback(Component.literal("[Craftify] Operating system: ")
                 .withStyle(ChatFormatting.GOLD)
                 .append(Component.literal(os.name()).withStyle(ChatFormatting.YELLOW)));
 
         if (os == SpotifyProcess.Os.UNSUPPORTED) {
-            source.sendError(Component.literal("[Craftify] Este sistema operativo no está soportado.")
+            source.sendError(Component.literal("[Craftify] This operating system is not supported.")
                     .withStyle(ChatFormatting.RED));
             return 0;
         }
 
         boolean running = SpotifyProcess.isRunning(os);
-        source.sendFeedback(Component.literal("[Craftify] Proceso de Spotify (" + os.executable() + "): ")
+        source.sendFeedback(Component.literal("[Craftify] Spotify process (" + os.executable() + "): ")
                 .withStyle(ChatFormatting.GOLD)
                 .append(running
-                        ? Component.literal("corriendo").withStyle(ChatFormatting.GREEN)
-                        : Component.literal("no encontrado").withStyle(ChatFormatting.RED)));
+                        ? Component.literal("running").withStyle(ChatFormatting.GREEN)
+                        : Component.literal("not found").withStyle(ChatFormatting.RED)));
 
         if (running) {
             String title = SpotifyProcess.readTitle(os);
             if (title == null) {
-                source.sendFeedback(Component.literal("[Craftify] Estado: ")
+                source.sendFeedback(Component.literal("[Craftify] State: ")
                         .withStyle(ChatFormatting.GOLD)
-                        .append(Component.literal("sin canción activa (no_track)").withStyle(ChatFormatting.YELLOW)));
+                        .append(Component.literal("no active song (no_track)").withStyle(ChatFormatting.YELLOW)));
                 sendNoTrackHint(source, os);
             } else {
-                source.sendFeedback(Component.literal("[Craftify] Estado: ")
+                source.sendFeedback(Component.literal("[Craftify] State: ")
                         .withStyle(ChatFormatting.GOLD)
-                        .append(Component.literal("reproduciendo (playing)").withStyle(ChatFormatting.GREEN)));
-                source.sendFeedback(Component.literal("[Craftify] Título actual: ")
+                        .append(Component.literal("playing").withStyle(ChatFormatting.GREEN)));
+                source.sendFeedback(Component.literal("[Craftify] Current title: ")
                         .withStyle(ChatFormatting.GOLD)
                         .append(Component.literal(title).withStyle(ChatFormatting.WHITE)));
             }
         } else {
-            source.sendFeedback(Component.literal("[Craftify] Estado: ")
+            source.sendFeedback(Component.literal("[Craftify] State: ")
                     .withStyle(ChatFormatting.GOLD)
-                    .append(Component.literal("Spotify cerrado (closed)").withStyle(ChatFormatting.RED)));
+                    .append(Component.literal("Spotify closed (closed)").withStyle(ChatFormatting.RED)));
         }
 
-        source.sendFeedback(Component.literal("[Craftify] Envío de paquetes: ")
+        source.sendFeedback(Component.literal("[Craftify] Packet sending: ")
                 .withStyle(ChatFormatting.GOLD)
                 .append(SpotifyTracker.isRunning()
                         ? (SpotifyTracker.isPaused()
-                                ? Component.literal("pausado (usa /craftify send on)").withStyle(ChatFormatting.YELLOW)
-                                : Component.literal("activo (detección en tiempo real de cambios de canción)").withStyle(ChatFormatting.GREEN))
-                        : Component.literal("inactivo (solo envía dentro de un mundo)").withStyle(ChatFormatting.GRAY)));
+                                ? Component.literal("paused (use /craftify send on)").withStyle(ChatFormatting.YELLOW)
+                                : Component.literal("active (real-time song change detection)").withStyle(ChatFormatting.GREEN))
+                        : Component.literal("inactive (only sends while in a world)").withStyle(ChatFormatting.GRAY)));
         return 1;
     }
 
-    /** Pista de qué hacer cuando el título no se pudo leer, según el sistema operativo. */
+    /** Suggests what to do when the title could not be read, per operating system. */
     private static void sendNoTrackHint(FabricClientCommandSource source, SpotifyProcess.Os os) {
         Component hint = switch (os) {
-            case MACOS -> Component.literal("[Craftify] Para leer el título: acepta el aviso \"controlar Spotify\" "
-                    + "cuando aparezca (una vez), o concede Grabación de Pantalla.")
+            case MACOS -> Component.literal("[Craftify] To read the title: accept the \"control Spotify\" prompt "
+                    + "when it appears (once), or grant Screen Recording.")
                     .withStyle(ChatFormatting.GRAY);
-            case LINUX -> Component.literal("[Craftify] Sin título: el mod incluye playerctl; como respaldo "
-                    + "instala xdotool (p. ej. sudo apt install xdotool) o playerctl del sistema.")
+            case LINUX -> Component.literal("[Craftify] No title: the mod bundles playerctl; as a backup "
+                    + "install xdotool (e.g. sudo apt install xdotool) or the system playerctl.")
                     .withStyle(ChatFormatting.GRAY);
             default -> null;
         };

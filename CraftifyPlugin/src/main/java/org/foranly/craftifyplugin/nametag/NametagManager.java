@@ -7,15 +7,15 @@ import org.bukkit.plugin.Plugin;
 import org.foranly.craftifyplugin.PlayerSpotifyState;
 
 /**
- * Muestra el título de la canción en el **nombre flotante** del jugador (el nametag que
- * Minecraft renderiza sobre la cabeza), en vez de una entidad holograma.
+ * Shows the song title in the player's **floating name** (the nametag Minecraft renders
+ * above the head), instead of a hologram entity.
  *
- * <p>Ventaja: el nametag es parte de la entidad del jugador, así que sigue sus movimientos
- * sin lag (a diferencia del holograma {@code TextDisplay}, que se teletransporta por tick).
- * Se configura en {@code config.yml} (sección {@code nametag}).
+ * <p>Advantage: the nametag is part of the player's entity, so it follows their movements
+ * without lag (unlike the {@code TextDisplay} hologram, which teleports every tick). It is
+ * configured in {@code config.yml} (section {@code nametag}).
  *
- * <p>Nota: el jugador dueño del nombre solo lo ve en tercera persona (F5) si el mod del
- * cliente trae el mixin correspondiente — por defecto Minecraft no muestra el nombre propio.
+ * <p>Note: the owner of the name only sees it in third person (F5) if the client mod
+ * includes the corresponding mixin — by default Minecraft does not show your own name.
  */
 public final class NametagManager {
 
@@ -30,9 +30,8 @@ public final class NametagManager {
     }
 
     /**
-     * Actualiza el nametag del jugador según su estado de Spotify: con {@code playing} y
-     * título, muestra el nombre + el título; en cualquier otro estado restaura el nombre
-     * normal del jugador.
+     * Updates the player's nametag according to their Spotify state: with {@code playing}
+     * and a title, shows name + title; in any other state restores the player's normal name.
      */
     public void update(Player player, PlayerSpotifyState state) {
         if (!enabled) {
@@ -49,7 +48,7 @@ public final class NametagManager {
         }
     }
 
-    /** Restaura el nametag del jugador a su nombre normal (p. ej. al desconectar/deshabilitar). */
+    /** Restores the player's nametag to their normal name (e.g. on disconnect/disable). */
     public void reset(Player player) {
         if (!enabled) {
             return;

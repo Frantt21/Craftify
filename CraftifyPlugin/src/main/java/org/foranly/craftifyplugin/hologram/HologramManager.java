@@ -21,12 +21,11 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Holograma sobre el jugador con un icono de música y el título de la canción
- * (PROTOCOL.md §4.4).
+ * Hologram above the player with a music icon and the song title (PROTOCOL.md §4.4).
  *
- * <p>Usa una entidad {@link TextDisplay} que sigue al jugador (billboard + teleport por
- * tick), sin depender de plugins de hologramas externos. Visible para todos los jugadores
- * cercanos. Configurable en {@code config.yml} (sección {@code hologram}).
+ * <p>Uses a {@link TextDisplay} entity that follows the player (billboard + per-tick
+ * teleport), with no external hologram plugin dependencies. Visible to all nearby players.
+ * Configurable in {@code config.yml} (section {@code hologram}).
  */
 public final class HologramManager {
 
@@ -41,13 +40,13 @@ public final class HologramManager {
 
     public HologramManager(Plugin plugin) {
         this.plugin = plugin;
-        this.enabled = plugin.getConfig().getBoolean("hologram.enabled", true);
+        this.enabled = plugin.getConfig().getBoolean("hologram.enabled", false);
         this.icon = plugin.getConfig().getString("hologram.icon", "♪ ");
         this.height = plugin.getConfig().getDouble("hologram.height", 2.15);
         this.scale = (float) plugin.getConfig().getDouble("hologram.scale", 0.6);
     }
 
-    /** Arranca la tarea que mantiene los hologramas sobre sus jugadores. */
+    /** Starts the task that keeps the holograms above their players. */
     public void start() {
         if (!enabled) {
             return;
@@ -56,8 +55,8 @@ public final class HologramManager {
     }
 
     /**
-     * Actualiza el holograma del jugador según su nuevo estado: muestra el título si
-     * {@code playing}, lo oculta en cualquier otro caso.
+     * Updates the player's hologram according to their new state: shows the title if
+     * {@code playing}, hides it in any other case.
      */
     public void update(Player player, PlayerSpotifyState state) {
         if (!enabled) {
@@ -76,7 +75,7 @@ public final class HologramManager {
         }
     }
 
-    /** Elimina el holograma de un jugador (p. ej. al desconectar). */
+    /** Removes a player's hologram (e.g. on disconnect). */
     public void remove(UUID player) {
         TextDisplay display = displays.remove(player);
         if (display != null) {
@@ -84,7 +83,7 @@ public final class HologramManager {
         }
     }
 
-    /** Cancela el seguimiento y elimina todos los hologramas (onDisable). */
+    /** Cancels the follow task and removes all holograms (onDisable). */
     public void shutdown() {
         if (followTask != null) {
             followTask.cancel();
@@ -103,13 +102,13 @@ public final class HologramManager {
             display.setSeeThrough(true);
             display.setBackgroundColor(Color.fromARGB(120, 0, 0, 0));
             display.setViewRange(2.0f);
-            display.setPersistent(false); // no guardar en el mundo (evita duplicados al reiniciar)
+            display.setPersistent(false); // do not save to the world (avoids duplicates on restart)
             display.setTransformation(new Transformation(
                     new Vector3f(), new Quaternionf(), new Vector3f(scale, scale, scale), new Quaternionf()));
         });
     }
 
-    /** Mueve cada holograma a la posición actual de su jugador (también cruza de mundo). */
+    /** Moves each hologram to its player's current position (also crosses worlds). */
     private void followPlayers() {
         displays.forEach((uuid, display) -> {
             Player player = Bukkit.getPlayer(uuid);

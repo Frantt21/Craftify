@@ -7,28 +7,28 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import org.foranly.craftify.client.network.SpotifyTitlePayload;
 
 /**
- * Monitorea el estado de Spotify mientras el jugador está en un mundo y envía un paquete
- * {@code craftify:title} al servidor cada vez que ese estado cambia.
+ * Monitors the Spotify state while the player is in a world and sends a {@code craftify:title}
+ * packet to the server every time that state changes.
  *
- * <p>El payload distingue tres estados:
+ * <p>The payload distinguishes three states:
  * <ul>
- *   <li>{@code playing}: Spotify corriendo con un título legible (canción activa);</li>
- *   <li>{@code no_track}: Spotify corriendo pero sin canción activa legible;</li>
- *   <li>{@code closed}: Spotify cerrado.</li>
+ *   <li>{@code playing}: Spotify running with a readable title (active song);</li>
+ *   <li>{@code no_track}: Spotify running but without a readable active song;</li>
+ *   <li>{@code closed}: Spotify closed.</li>
  * </ul>
  *
- * <p>El polling es adaptativo: mientras Spotify está corriendo se consulta cada
- * {@value #FAST_POLL_MS} ms (cambios de canción casi en tiempo real) y cuando está cerrado
- * se baja a {@value #SLOW_POLL_MS} ms para no lanzar procesos del SO en vano.
+ * <p>The polling is adaptive: while Spotify is running it queries every {@value #FAST_POLL_MS}
+ * ms (near real-time song changes) and when it is closed it drops to {@value #SLOW_POLL_MS}
+ * ms so it does not spawn OS processes in vain.
  *
- * <p>La lectura del título se hace en un hilo aparte (es I/O del sistema operativo) y el
- * envío se hace por el canal de netty, que es seguro para escrituras desde cualquier hilo.
+ * <p>The title read happens on a separate thread (it is OS I/O) and the send goes through
+ * the netty channel, which is safe for writes from any thread.
  */
 public final class SpotifyTracker {
 
-    /** Intervalo con Spotify corriendo. */
+    /** Interval while Spotify is running. */
     private static final long FAST_POLL_MS = 500;
-    /** Intervalo con Spotify cerrado (backoff). */
+    /** Interval while Spotify is closed (backoff). */
     private static final long SLOW_POLL_MS = 5000;
 
     private static ScheduledExecutorService executor;
@@ -38,7 +38,7 @@ public final class SpotifyTracker {
     private SpotifyTracker() {
     }
 
-    /** Arranca el seguimiento. No hace nada si ya está corriendo. */
+    /** Starts tracking. Does nothing if it is already running. */
     public static synchronized void start() {
         if (executor != null) {
             return;
@@ -52,7 +52,7 @@ public final class SpotifyTracker {
         executor.schedule(SpotifyTracker::tick, 0, TimeUnit.MILLISECONDS);
     }
 
-    /** Detiene el seguimiento y limpia el estado. */
+    /** Stops tracking and clears the state. */
     public static synchronized void stop() {
         if (executor == null) {
             return;
@@ -62,24 +62,24 @@ public final class SpotifyTracker {
         lastSignature = null;
     }
 
-    /** Indica si el seguimiento está activo. */
+    /** Whether tracking is active. */
     public static boolean isRunning() {
         return executor != null;
     }
 
     /**
-     * Pausa o reanuda el envío de paquetes. Al reanudar, la siguiente lectura envía el
-     * estado actual de Spotify (como si se acabara de entrar al mundo).
+     * Pauses or resumes packet sending. On resume, the next read sends the current Spotify
+     * state (as if the player had just joined the world).
      */
     public static synchronized void setPaused(boolean value) {
         paused = value;
         if (!value) {
-            // Forzar que la próxima lectura notifique el estado actual.
+            // Force the next read to report the current state.
             lastSignature = null;
         }
     }
 
-    /** Indica si el envío de paquetes está pausado. */
+    /** Whether packet sending is paused. */
     public static boolean isPaused() {
         return paused;
     }
@@ -89,7 +89,7 @@ public final class SpotifyTracker {
         try {
             SpotifyProcess.Os os = SpotifyProcess.currentOs();
             if (os != SpotifyProcess.Os.UNSUPPORTED) {
-                // Una sola sonda por consulta (procesos del SO o llamada nativa).
+                // A single probe per query (OS processes or a native call).
                 SpotifyProcess.Snapshot snapshot = SpotifyProcess.readSnapshot(os);
                 spotifyRunning = snapshot.running();
 
@@ -106,7 +106,7 @@ public final class SpotifyTracker {
                     track = snapshot.title();
                 }
 
-                // Enviar solo cuando cambia la combinación estado + título (y no esté pausado).
+                // Send only when the state + title combination changes (and not paused).
                 String signature = state + '\u0000' + track;
                 if (!paused && !signature.equals(lastSignature)) {
                     lastSignature = signature;
@@ -114,7 +114,7 @@ public final class SpotifyTracker {
                 }
             }
         } catch (Exception e) {
-            // Una lectura fallida o un envío fallido no deben tumbar el seguimiento.
+            // A failed read or send must not kill the tracking.
         }
         scheduleNext(spotifyRunning);
     }
@@ -133,7 +133,7 @@ public final class SpotifyTracker {
         try {
             ClientPlayNetworking.send(payload);
         } catch (IllegalStateException e) {
-            // Ya no estamos conectados a un mundo; se retomará en el próximo JOIN.
+            // No longer connected to a world; it will resume on the next JOIN.
         }
     }
 }

@@ -10,7 +10,7 @@ import org.foranly.craftifyplugin.PlayerSpotifyState;
 import org.foranly.craftifyplugin.SpotifyStateManager;
 
 /**
- * {@code /nowplaying} — muestra el estado de Spotify del jugador (PROTOCOL.md §4.4).
+ * {@code /nowplaying} — shows the player's Spotify state (PROTOCOL.md §4.4).
  */
 public final class NowPlayingCommand implements CommandExecutor {
 
@@ -23,28 +23,28 @@ public final class NowPlayingCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(Component.text("Solo jugadores.", NamedTextColor.RED));
+            sender.sendMessage(Component.text("Players only.", NamedTextColor.RED));
             return true;
         }
 
         PlayerSpotifyState state = stateManager.get(player.getUniqueId()).orElse(null);
         if (state == null) {
             player.sendMessage(Component.text(
-                    "Sin datos de Spotify todavía. ¿Tienes el mod Craftify instalado en el cliente?",
+                    "No Spotify data yet. Do you have the Craftify mod installed on the client?",
                     NamedTextColor.GRAY));
             return true;
         }
 
         switch (state.state()) {
             case PlayerSpotifyState.STATE_PLAYING -> player.sendMessage(
-                    Component.text("Escuchando: ", NamedTextColor.GREEN)
+                    Component.text("Listening to: ", NamedTextColor.GREEN)
                             .append(Component.text(state.track(), NamedTextColor.WHITE)));
             case PlayerSpotifyState.STATE_NO_TRACK -> player.sendMessage(
-                    Component.text("Spotify abierto, sin canción activa.", NamedTextColor.YELLOW));
+                    Component.text("Spotify open, no active song.", NamedTextColor.YELLOW));
             case PlayerSpotifyState.STATE_CLOSED -> player.sendMessage(
-                    Component.text("Spotify cerrado.", NamedTextColor.RED));
+                    Component.text("Spotify closed.", NamedTextColor.RED));
             default -> player.sendMessage(
-                    Component.text("Estado desconocido: " + state.state(), NamedTextColor.GRAY));
+                    Component.text("Unknown state: " + state.state(), NamedTextColor.GRAY));
         }
         return true;
     }

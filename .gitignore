@@ -1,2 +1,8 @@
-/CraftifyMod/.gradle
-/CraftifyMod/run
+# Gradle build artifacts (mod)
+/CraftifyMod/.gradle/
+/CraftifyMod/build/
+/CraftifyMod/run/
+
+# Gradle build artifacts (plugin)
+/CraftifyPlugin/.gradle/
+/CraftifyPlugin/build/

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Descarga el binario oficial de playerctl (MIT, solo depende de libglib2.0-0) desde el
-# release de GitHub y lo coloca en las resources del mod para que se incluya en el JAR.
-# Así, en Linux el jugador NO necesita instalar nada con sudo.
+# Downloads the official playerctl binary (MIT, only depends on libglib2.0-0) from the
+# GitHub release and places it in the mod's resources so it is bundled into the JAR.
+# That way, on Linux the player does NOT need to install anything with sudo.
 #
-# Uso (desde la raíz del proyecto CraftifyMod):
+# Usage (from the CraftifyMod project root):
 #   bash scripts/fetch-linux-playerctl.sh
 #
-# Para otras arquitecturas (p. ej. aarch64), deja el binario en:
+# For other architectures (e.g. aarch64), drop the binary at:
 #   src/main/resources/assets/craftify/native/linux/aarch64/playerctl
 set -euo pipefail
 
@@ -17,21 +17,21 @@ DEST="src/main/resources/assets/craftify/native/linux/x86_64"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-echo "Descargando playerctl ${VERSION} (release oficial de GitHub)..."
+echo "Downloading playerctl ${VERSION} (official GitHub release)..."
 curl -fsSL -o "$TMP/playerctl.deb" "$URL"
 
-echo "Extrayendo el binario del .deb..."
+echo "Extracting the binary from the .deb..."
 if command -v 7z >/dev/null 2>&1; then
     (cd "$TMP" && 7z x -y playerctl.deb >/dev/null && tar -xf data.tar.gz)
 elif command -v ar >/dev/null 2>&1; then
     (cd "$TMP" && ar x playerctl.deb && tar -xf data.tar.*)
 else
-    echo "ERROR: se necesita 7z o ar para extraer el .deb." >&2
+    echo "ERROR: 7z or ar is required to extract the .deb." >&2
     exit 1
 fi
 
 if [ ! -f "$TMP/usr/bin/playerctl" ]; then
-    echo "ERROR: no se encontró usr/bin/playerctl dentro del paquete." >&2
+    echo "ERROR: usr/bin/playerctl not found inside the package." >&2
     exit 1
 fi
 

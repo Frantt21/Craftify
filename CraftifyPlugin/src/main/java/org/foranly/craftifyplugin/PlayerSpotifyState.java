@@ -5,21 +5,21 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 
 /**
- * Estado de Spotify de un jugador, según {@code PROTOCOL.md §2.2/§2.3}.
+ * A player's Spotify state, per {@code PROTOCOL.md §2.2/§2.3}.
  *
- * <p>Campos del JSON {@code craftify:title}: {@code state}, {@code track}, {@code timestamp}.
+ * <p>Fields of the {@code craftify:title} JSON: {@code state}, {@code track}, {@code timestamp}.
  */
 public record PlayerSpotifyState(String state, String track, long timestamp) {
 
-    /** Estados del protocolo (PROTOCOL.md §2.3). */
+    /** Protocol states (PROTOCOL.md §2.3). */
     public static final String STATE_PLAYING = "playing";
     public static final String STATE_NO_TRACK = "no_track";
     public static final String STATE_CLOSED = "closed";
 
     /**
-     * Parsea el JSON del payload {@code craftify:title}.
+     * Parses the JSON of the {@code craftify:title} payload.
      *
-     * @return el estado, o {@code null} si el JSON es inválido
+     * @return the state, or {@code null} if the JSON is invalid
      */
     public static PlayerSpotifyState fromJson(String json) {
         try {
@@ -35,7 +35,7 @@ public record PlayerSpotifyState(String state, String track, long timestamp) {
         }
     }
 
-    /** Indica si hay una canción activa (estado {@code playing}). */
+    /** Whether there is an active song ({@code playing} state). */
     public boolean isPlaying() {
         return STATE_PLAYING.equals(state);
     }

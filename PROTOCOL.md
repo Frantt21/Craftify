@@ -1,166 +1,167 @@
-# Protocolo de comunicación de Craftify
+# Craftify communication protocol
 
-Este documento es el **contrato entre el mod (cliente) y el plugin (servidor)**. Define cómo el
-mod detecta y envía el estado de Spotify, el formato exacto de los bytes que viajan por la red,
-y cómo el plugin debe recibirlos y usarlos.
+This document is the **contract between the mod (client) and the plugin (server)**. It
+defines how the mod detects and sends the Spotify state, the exact bytes that travel over
+the network, and how the plugin must receive and use them.
 
-- **Emisor:** mod CraftifyMod (solo cliente, Fabric) — ver [`CraftifyMod/README.md`](CraftifyMod/README.md).
-- **Receptor:** plugin del servidor — ver [`CraftifyPlugin/README.md`](CraftifyPlugin/README.md)
-  (Paper; también puede ser un mod Fabric del servidor — el formato está pensado para que
-  cualquiera de los dos lo decodifique).
-- **Dirección:** cliente → servidor. Unidireccional; hoy no hay paquetes de vuelta.
-- **Documentación general del sistema:** [`README.md`](README.md).
+- **Sender:** the CraftifyMod mod (client-only, Fabric) — see [`CraftifyMod/README.md`](CraftifyMod/README.md).
+- **Receiver:** the server plugin — see [`CraftifyPlugin/README.md`](CraftifyPlugin/README.md)
+  (Paper; it can also be a Fabric server mod — the format is designed so either of them can
+  decode it).
+- **Direction:** client → server. One-way; there are no return packets today.
+- **Overall system documentation:** [`README.md`](README.md).
 
 ```
 ┌───────────────────────────────┐   minecraft:custom_payload   ┌───────────────────────────────┐
-│  Cliente: mod CraftifyMod     │ ───────────────────────────►  │  Servidor: plugin (futuro)    │
-│                               │   canal "craftify:title"     │                               │
-│  - Detecta Spotify en el SO   │   payload: JSON UTF-8        │  - Recibe el estado por       │
-│  - Lee el título de la canción│                              │    jugador                     │
-│  - Envía solo cuando cambia   │                              │  - Lo convierte/expone        │
+│  Client: CraftifyMod          │ ───────────────────────────►  │  Server: plugin (future)      │
+│                               │   channel "craftify:title"   │                               │
+│  - Detects Spotify on the OS  │   payload: UTF-8 JSON        │  - Receives the state per     │
+│  - Reads the song title       │                              │    player                      │
+│  - Sends only on changes      │                              │  - Converts/exposes it        │
 └───────────────────────────────┘                              └───────────────────────────────┘
 ```
 
 ---
 
-## ⚡ Referencia rápida para el plugin
+## ⚡ Quick reference for the plugin
 
-| Qué | Valor |
+| What | Value |
 |-----|-------|
-| Paquete | `minecraft:custom_payload`, fase `play` |
-| Canal | `craftify:title` |
-| Dirección | Cliente → Servidor |
-| Payload | `[VarInt longitud][bytes UTF-8 de un JSON]` |
+| Packet | `minecraft:custom_payload`, `play` phase |
+| Channel | `craftify:title` |
+| Direction | Client → Server |
+| Payload | `[VarInt length][UTF-8 bytes of a JSON]` |
 | JSON | `{"state":"...","track":"...","timestamp":...}` |
-| Estados | `playing` · `no_track` · `closed` |
-| Frecuencia | **Solo cuando el estado cambia** (nada de heartbeat) |
+| States | `playing` · `no_track` · `closed` |
+| Frequency | **Only when the state changes** (no heartbeat) |
 
-Reglas de oro:
+Golden rules:
 
-1. El **último paquete recibido ES el estado actual** del jugador: no esperes actualizaciones
-   periódicas.
-2. Guarda el estado por UUID y **bórralo al desconectar** el jugador.
-3. Usa `timestamp` para descartar paquetes viejos/duplicados.
-4. `playing` no significa necesariamente reproduciendo: el mod no distingue pausa
-   (el título de la ventana no cambia al pausar).
-5. `track` es un único string `"Canción - Artista"`; separar título y artista es trabajo del
-   plugin (p. ej. por el último ` - `).
+1. The **last received packet IS the player's current state**: don't expect periodic
+   updates.
+2. Store the state per UUID and **remove it when the player disconnects**.
+3. Use `timestamp` to discard old/duplicate packets.
+4. `playing` does not necessarily mean "currently playing": the mod does not distinguish
+   pause (the window title does not change when paused).
+5. `track` is a single string `"Song - Artist"`; splitting title and artist is the
+   plugin's job (e.g. by the last ` - `).
 
 ---
 
-## 1. Cómo el mod envía los paquetes
+## 1. How the mod sends the packets
 
-### 1.1 Resumen de la cadena
+### 1.1 Chain summary
 
-1. **`SpotifyProcess.readSnapshot(os)`** hace una sonda del sistema operativo del jugador
-   (una sola consulta por poll) y devuelve `(running, title)`:
-   - Windows: sonda nativa JNA (`Toolhelp32` + `EnumWindows`), ~10–60 ms. Las ventanas se
-     identifican **por PID** (no por nombre de módulo) y el título sigue disponible con
-     Spotify **minimizado o en la bandeja** (segundo pase sobre ventanas ocultas,
-     descartando las auxiliares IME/GDI+).
-   - macOS: sonda nativa JNA/CoreGraphics (`CGWindowListCopyWindowInfo`), ~1–10 ms. Solo
-     lista ventanas en la sesión actual; el título requiere permiso de Grabación de Pantalla.
-   - Linux: `playerctl` (MPRIS) como sonda principal — **el mod incluye el binario oficial de
-     playerctl dentro del JAR** (se extrae al directorio temporal del usuario, sin sudo) con
-     fallback al `playerctl` del sistema y luego `pgrep` + `xdotool`.
-   - Todas las plataformas tienen fallback CLI si la sonda nativa no está disponible.
-2. **`SpotifyTracker`** (hilo `daemon`) consulta ese snapshot mientras el jugador está en un
-   mundo y decide si el estado cambió.
-3. Si cambió, construye un **`SpotifyTitlePayload`** (JSON) y lo envía con
+1. **`SpotifyProcess.readSnapshot(os)`** probes the player's operating system (a single
+   query per poll) and returns `(running, title)`:
+   - Windows: native JNA probe (`Toolhelp32` + `EnumWindows`), ~10–60 ms. Windows are
+     identified **by PID** (not by module name) and the title stays available with Spotify
+     **minimized or in the tray** (second pass over hidden windows, skipping auxiliary
+     IME/GDI+ windows).
+   - macOS: native JNA/CoreGraphics probe (`CGWindowListCopyWindowInfo`), ~1–10 ms. It only
+     lists windows in the current session; the title requires the Screen Recording
+     permission.
+   - Linux: `playerctl` (MPRIS) as the main probe — **the mod bundles the official
+     playerctl binary inside the JAR** (extracted to the user's temp directory, no sudo)
+     with a fallback to the system `playerctl` and then `pgrep` + `xdotool`.
+   - All platforms have a CLI fallback if the native probe is not available.
+2. **`SpotifyTracker`** (a `daemon` thread) queries that snapshot while the player is in a
+   world and decides whether the state changed.
+3. If it changed, it builds a **`SpotifyTitlePayload`** (JSON) and sends it with
    `ClientPlayNetworking.send(payload)`.
 
-### 1.2 Cuándo se envía
+### 1.2 When it sends
 
-El mod **no** manda paquetes en bucle. Envía uno **solo cuando el estado cambia**:
+The mod does **not** send packets in a loop. It sends one **only when the state changes**:
 
-| Momento | Qué se envía |
+| Moment | What is sent |
 |---------|--------------|
-| Al entrar a un mundo | El estado actual (aunque sea `closed`) |
-| Cambia la canción | `playing` con el título nuevo |
-| Spotify pasa a sin título legible | `no_track` |
-| Spotify se cierra | `closed` |
-| Se reanuda tras `/craftify send off` | El estado actual (para re-sincronizar) |
+| Joining a world | The current state (even if `closed`) |
+| The song changes | `playing` with the new title |
+| Spotify goes to no readable title | `no_track` |
+| Spotify closes | `closed` |
+| Resuming after `/craftify send off` | The current state (to re-sync) |
 
-No existe heartbeat ni confirmación (ACK): si el servidor pierde un paquete, se entera en el
-siguiente cambio de estado.
+There is no heartbeat or acknowledgement (ACK): if the server drops a packet, it learns
+about it on the next state change.
 
-### 1.3 Latencia y polling
+### 1.3 Latency and polling
 
-- **~500 ms** de intervalo mientras Spotify está corriendo → cambios de canción casi en
-  tiempo real (ciclo efectivo ~0,5–0,6 s).
-- **~5 s** de backoff cuando Spotify está cerrado (no gastar recursos en vano).
-- El envío se puede pausar/reanudar en el cliente con `/craftify send on|off|toggle`.
+- **~500 ms** interval while Spotify is running → near real-time song changes (effective
+  cycle ~0.5–0.6 s).
+- **~5 s** backoff when Spotify is closed (don't waste resources).
+- Sending can be paused/resumed on the client with `/craftify send on|off|toggle`.
 
-### 1.4 Clases relevantes del mod
+### 1.4 Relevant mod classes
 
-| Clase | Responsabilidad |
+| Class | Responsibility |
 |-------|-----------------|
-| `SpotifyTracker` | Polling adaptativo, detección de cambios, pausa/reanudación |
-| `SpotifyProcess` | Snapshot `(running, title)` por SO + fallbacks CLI |
-| `WindowsSpotify` / `MacosSpotify` | Sondas nativas JNA |
-| `SpotifyTitlePayload` | Definición del canal, codec y serialización JSON |
+| `SpotifyTracker` | Adaptive polling, change detection, pause/resume |
+| `SpotifyProcess` | `(running, title)` snapshot per OS + CLI fallbacks |
+| `WindowsSpotify` / `MacosSpotify` | Native JNA probes |
+| `SpotifyTitlePayload` | Channel definition, codec and JSON serialization |
 
 ---
 
-## 2. Formato on-wire (el contrato)
+## 2. On-wire format (the contract)
 
-| Campo | Valor |
+| Field | Value |
 |-------|-------|
-| Paquete de Minecraft | `minecraft:custom_payload` |
-| Fase | `play` |
-| Canal | `craftify:title` |
-| Dirección | Cliente → Servidor (serverbound) |
-| Contenido | Un único String UTF-8 con JSON |
+| Minecraft packet | `minecraft:custom_payload` |
+| Phase | `play` |
+| Channel | `craftify:title` |
+| Direction | Client → Server (serverbound) |
+| Content | A single UTF-8 String containing JSON |
 
-### 2.1 Bytes del payload
+### 2.1 Payload bytes
 
 ```
-[VarInt longitud] [bytes UTF-8 del JSON]
+[VarInt length] [UTF-8 bytes of the JSON]
 ```
 
-1. Un `VarInt` (codificación estándar de Minecraft, 7 bits por grupo, máx. 5 bytes) con la
-   longitud **en bytes** del String.
-2. Los bytes UTF-8 del JSON que se describe abajo.
+1. A `VarInt` (standard Minecraft encoding, 7 bits per group, max 5 bytes) with the
+   length **in bytes** of the String.
+2. The UTF-8 bytes of the JSON described below.
 
-Un título de canción típico ocupa menos de 200 bytes, muy por debajo del límite de los
-payloads pequeños (~32 KB).
+A typical song title takes less than 200 bytes, well below the small-payload limit
+(~32 KB).
 
-### 2.2 Contenido del JSON
+### 2.2 JSON content
 
 ```json
 {
   "state": "playing",
-  "track": "Mi Canción Favorita - Mi Artista",
+  "track": "My Favorite Song - My Artist",
   "timestamp": 1760000000000
 }
 ```
 
-| Campo | Tipo | Descripción |
+| Field | Type | Description |
 |-------|------|-------------|
-| `state` | string | Uno de los tres estados (tabla abajo). |
-| `track` | string | Título de la canción (`"Canción - Artista"`); vacío si no hay canción activa. |
-| `timestamp` | number (long) | Epoch millis del momento de la captura. |
+| `state` | string | One of the three states (table below). |
+| `track` | string | Song title (`"Song - Artist"`); empty when there is no active song. |
+| `timestamp` | number (long) | Epoch millis of the capture moment. |
 
-### 2.3 Estados
+### 2.3 States
 
-| `state` | Significado | `track` |
+| `state` | Meaning | `track` |
 |---------|-------------|---------|
-| `playing` | Spotify está corriendo y hay un título legible (canción activa). La canción puede estar en pausa: el título no distingue pausa/reproducción. | El título |
-| `no_track` | Spotify está corriendo pero no se pudo leer ninguna canción (permisos del SO sin otorgar, o en macOS/Linux cuando la ventana no es legible — en Windows sí se lee aunque esté en la bandeja). | `""` |
-| `closed` | Spotify no está corriendo. | `""` |
+| `playing` | Spotify is running and there is a readable title (active song). The song may be paused: the title does not distinguish pause/play. | The title |
+| `no_track` | Spotify is running but no song could be read (OS permissions not granted, or on macOS/Linux when the window is not readable — on Windows it is read even when in the tray). | `""` |
+| `closed` | Spotify is not running. | `""` |
 
 ---
 
-## 3. Cómo debe recibirlos el plugin
+## 3. How the plugin must receive them
 
-El plugin puede ser de dos tipos; en ambos casos los bytes que llegan son los del §2.1.
+The plugin can be of two types; in both cases the bytes that arrive are those of §2.1.
 
-### 3.1 Plugin Fabric (mod del servidor)
+### 3.1 Fabric plugin (server mod)
 
-Registra el mismo tipo de payload (serverbound) y un receiver global:
+Registers the same payload type (serverbound) and a global receiver:
 
 ```java
-// En el onInitialize() del plugin del servidor
+// In the server plugin's onInitialize()
 import io.netty.buffer.ByteBuf;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -176,7 +177,7 @@ public static final Type<SpotifyTitlePayload> TYPE = new Type<>(CHANNEL);
 public static final StreamCodec<ByteBuf, SpotifyTitlePayload> CODEC =
         ByteBufCodecs.STRING_UTF8.map(SpotifyTitlePayload::new, SpotifyTitlePayload::json);
 
-// Payload idéntico al del cliente
+// Payload identical to the client's
 public record SpotifyTitlePayload(String json) implements CustomPacketPayload {
     @Override
     public Type<? extends CustomPacketPayload> type() {
@@ -184,20 +185,21 @@ public record SpotifyTitlePayload(String json) implements CustomPacketPayload {
     }
 }
 
-// Registro + handler
+// Registration + handler
 PayloadTypeRegistry.serverboundPlay().register(TYPE, CODEC);
 
 ServerPlayNetworking.registerGlobalReceiver(TYPE, (payload, context) -> {
     ServerPlayer player = context.player();
-    // payload.json() es el JSON crudo; parsearlo (Gson, Jackson, etc.)
-    // y guardarlo como el estado actual del jugador.
+    // payload.json() is the raw JSON; parse it (Gson, Jackson, etc.)
+    // and store it as the player's current state.
     handleTitle(player.getUUID(), payload.json());
 });
 ```
 
-### 3.2 Plugin Paper/Bukkit
+### 3.2 Paper/Bukkit plugin
 
-Intercepta el paquete `minecraft:custom_payload` en la capa de red y lee los bytes crudos:
+Intercepts the `minecraft:custom_payload` packet at the network layer and reads the raw
+bytes:
 
 ```java
 public class SpotifyListener implements PluginMessageListener {
@@ -209,14 +211,14 @@ public class SpotifyListener implements PluginMessageListener {
         if (!CHANNEL.equals(channel)) {
             return;
         }
-        // El payload es: [VarInt longitud][UTF-8 JSON]
+        // The payload is: [VarInt length][UTF-8 JSON]
         int[] offset = {0};
         int length = readVarInt(message, offset);
         String json = new String(message, offset[0], length, StandardCharsets.UTF_8);
         handleTitle(player.getUniqueId(), json);
     }
 
-    // VarInt de Minecraft: 7 bits por grupo; el bit alto (0x80) indica que hay más bytes.
+    // Minecraft VarInt: 7 bits per group; the high bit (0x80) means there are more bytes.
     private static int readVarInt(byte[] buf, int[] offset) {
         int value = 0;
         int shift = 0;
@@ -228,96 +230,96 @@ public class SpotifyListener implements PluginMessageListener {
             }
             shift += 7;
         }
-        throw new IllegalArgumentException("VarInt sin terminar");
+        throw new IllegalArgumentException("Unterminated VarInt");
     }
 }
 ```
 
-Regístrate como listener en `onEnable()`:
+Register the listener in `onEnable()`:
 
 ```java
 getServer().getMessenger().registerIncomingPluginChannel(this, "craftify:title", new SpotifyListener());
 ```
 
-### 3.3 Decodificación manual (cualquier stack)
+### 3.3 Manual decoding (any stack)
 
-Los bytes crudos del payload se decodifican así, sin depender del mod:
+The raw payload bytes are decoded like this, without depending on the mod:
 
-1. Leer un `VarInt` → longitud `L` en bytes del String.
-2. Leer los siguientes `L` bytes como texto UTF-8.
-3. Parsear ese texto como JSON.
-4. Leer `state`, `track` y `timestamp`.
+1. Read a `VarInt` → length `L` in bytes of the String.
+2. Read the next `L` bytes as UTF-8 text.
+3. Parse that text as JSON.
+4. Read `state`, `track` and `timestamp`.
 
-Decodificador VarInt (7 bits por grupo, como usa Minecraft):
+VarInt decoder (7 bits per group, like Minecraft uses):
 
 ```
-leer bytes hasta que el bit alto (0x80) esté apagado:
-    valor |= (byte & 0x7F) << (7 * posición)
+read bytes until the high bit (0x80) is off:
+    value |= (byte & 0x7F) << (7 * position)
 ```
 
 ---
 
-## 4. Cómo usarlos (recomendaciones para el plugin)
+## 4. How to use them (recommendations for the plugin)
 
-### 4.1 Mantener el último estado por jugador
+### 4.1 Keep the latest state per player
 
-Guarda el estado en memoria indexado por UUID y actualízalo en cada paquete:
+Store the state in memory indexed by UUID and update it on every packet:
 
 ```java
 Map<UUID, SpotifyState> byPlayer = new ConcurrentHashMap<>();
 // SpotifyState { String state; String track; long timestamp; }
 ```
 
-- El plugin **no debe** asumir que recibe actualizaciones periódicas: el mod solo envía en
-  cambios. El último paquete recibido ES el estado actual.
-- Al **desconectar** un jugador, elimina su entrada
-  (`PlayerQuitEvent` en Paper, `ServerPlayConnectionEvents.DISCONNECT` en Fabric).
+- The plugin **must not** assume periodic updates: the mod only sends on changes. The last
+  received packet IS the current state.
+- When a player **disconnects**, remove their entry
+  (`PlayerQuitEvent` on Paper, `ServerPlayConnectionEvents.DISCONNECT` on Fabric).
 
-### 4.2 Ordenar y descartar mensajes viejos con `timestamp`
+### 4.2 Order and discard old messages with `timestamp`
 
-El `timestamp` es epoch millis de la captura en el cliente. Úsalo para:
+The `timestamp` is the client's capture epoch millis. Use it to:
 
-- ignorar paquetes que llegan con `timestamp` anterior al último procesado (evita reordenados
-  o duplicados);
-- saber cuándo fue la última vez que cambió la canción.
+- ignore packets whose `timestamp` is older than the last processed one (avoids
+  reordering or duplicates);
+- know when the song last changed.
 
-### 4.3 Interpretación recomendada
+### 4.3 Recommended interpretation
 
-| Estado recibido | Qué significa para el plugin |
+| State received | What it means for the plugin |
 |-----------------|------------------------------|
-| `playing` con `track` | El jugador está escuchando esa canción (puede estar en pausa). |
-| `no_track` | Spotify abierto pero sin canción legible: mostrar "escuchando Spotify" sin título. |
-| `closed` | Spotify cerrado: limpiar cualquier "now playing" del jugador. |
+| `playing` with `track` | The player is listening to that song (may be paused). |
+| `no_track` | Spotify open but no readable song: show "listening to Spotify" without a title. |
+| `closed` | Spotify closed: clear any "now playing" for the player. |
 
-### 4.4 Ejemplo de feature
+### 4.4 Example feature
 
-"Now playing" en el chat/scoreboard: al recibir `playing`, formatear
-`<jugador> está escuchando <track>`; al recibir `closed`, quitar la línea.
+"Now playing" in chat/scoreboard: on `playing`, format
+`<player> is listening to <track>`; on `closed`, remove the line.
 
 ---
 
-## 5. Limitaciones y notas
+## 5. Limitations and notes
 
-- **Sin handshake ni ACK:** el canal se usa tal cual; el servidor no confirma nada.
-- **Latencia:** la detección de un cambio tarda ≤ ~0,5–0,6 s (intervalo de poll de 500 ms +
-  costo de sonda).
-- **`playing` ≠ reproduciendo:** el título de la ventana no cambia al pausar; el mod no
-  distingue pausa/reproducción. Un futuro paquete con estado de reproducción (p. ej. vía MPRIS)
-  es una extensión natural del protocolo.
-- **Permisos del SO (cliente):** en macOS detectar el proceso no requiere permisos; para el
-  título, el camino de menor fricción es el diccionario AppleScript de la propia app de
-  Spotify (un único prompt de Automatización), con Grabación de Pantalla y Accesibilidad
-  como alternativas. En Linux se usa `playerctl` (MPRIS, sin permisos) **incluido en el JAR**
-  del mod (extraído al temp del usuario, sin sudo), con `xdotool` como respaldo. La API local
-  de Spotify (puerto 4380) ya no existe en los clientes modernos.
-- **Ventana oculta por plataforma:** en Windows el título se sigue leyendo con Spotify
-  minimizado o en la bandeja (por eso el plugin seguirá recibiendo `playing` aunque el
-  jugador lo oculte). En macOS y Linux, si la ventana deja de ser legible, el mod pasa a
-  `no_track` — el plugin no debería tratar eso como "Spotify cerrado".
-- **Tamaño:** el payload es pequeño; los límites de los payloads de Fabric (`register` normal)
-  no son un problema para títulos de canción.
-- **Fabric sin el tipo registrado:** el servidor Fabric descarta los payloads cuyo tipo no
-  tiene handler. Paper, en cambio, intercepta los bytes crudos en la capa de red y los ve
-  siempre, sin importar registros.
-- **Extensión futura:** añadir nuevos canales (p. ej. `craftify:playback` con estado
-  pausa/reproducción) no rompe este contrato: cada canal es independiente.
+- **No handshake or ACK:** the channel is used as-is; the server acknowledges nothing.
+- **Latency:** a change takes ≤ ~0.5–0.6 s to be detected (500 ms poll interval + probe
+  cost).
+- **`playing` ≠ playing:** the window title does not change on pause; the mod does not
+  distinguish pause/play. A future packet with playback state (e.g. via MPRIS) is a natural
+  extension of the protocol.
+- **OS permissions (client):** on macOS detecting the process needs no permissions; for the
+  title, the lowest-friction path is Spotify's own AppleScript dictionary (a single
+  Automation prompt), with Screen Recording and Accessibility as alternatives. On Linux,
+  `playerctl` (MPRIS, no permissions) is used **bundled in the mod's JAR** (extracted to
+  the user's temp dir, no sudo), with `xdotool` as a fallback. Spotify's local API
+  (port 4380) no longer exists on modern clients.
+- **Hidden window by platform:** on Windows the title keeps being read with Spotify
+  minimized or in the tray (so the plugin will keep receiving `playing` even if the player
+  hides it). On macOS and Linux, if the window stops being readable the mod switches to
+  `no_track` — the plugin should not treat that as "Spotify closed".
+- **Size:** the payload is small; Fabric's payload limits (regular `register`) are not a
+  problem for song titles.
+- **Fabric without the type registered:** a Fabric server drops payloads whose type has no
+  handler. Paper, on the other hand, intercepts raw bytes at the network layer and always
+  sees them, regardless of registrations.
+- **Future extension:** adding new channels (e.g. `craftify:playback` with pause/play
+  state) does not break this contract: each channel is independent.

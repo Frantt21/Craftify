@@ -10,22 +10,23 @@ import com.sun.jna.platform.mac.CoreFoundation.CFIndex;
 import com.sun.jna.platform.mac.CoreFoundation.CFStringRef;
 
 /**
- * Sonda nativa (JNA/CoreGraphics) para macOS: detecta Spotify y lee el título de su ventana
- * sin lanzar procesos externos.
+ * Native (JNA/CoreGraphics) probe for macOS: detects Spotify and reads its window title
+ * without spawning external processes.
  *
- * <p>Reemplaza a {@code pgrep} + {@code osascript}, que tardaban ~200–500 ms por consulta
- * (el arranque del intérprete de AppleScript domina el costo). Una sola llamada nativa a
- * {@code CGWindowListCopyWindowInfo} devuelve la lista de ventanas con su dueño y su nombre:
+ * <p>Replaces {@code pgrep} + {@code osascript}, which took ~200–500 ms per query (the
+ * AppleScript interpreter startup dominates the cost). A single native call to
+ * {@code CGWindowListCopyWindowInfo} returns the window list with its owner and name:
  *
  * <ul>
- *   <li>el **dueño** de la ventana (p. ej. {@code Spotify}) siempre está disponible;</li>
- *   <li>el **nombre** (título) requiere permiso de Grabación de Pantalla en macOS 10.15+;
- *       si falta, el título queda vacío y el llamador puede caer a {@code osascript}.</li>
+ *   <li>the window **owner** (e.g. {@code Spotify}) is always available;</li>
+ *   <li>the **name** (title) requires the Screen Recording permission on macOS 10.15+;
+ *       if it is missing, the title stays empty and the caller can fall back to
+ *       {@code osascript}.</li>
  * </ul>
  */
 public final class MacosSpotify {
 
-    /** {@code kCGWindowListOptionAll}: listar todas las ventanas, incluso las que no están en pantalla. */
+    /** {@code kCGWindowListOptionAll}: list all windows, even off-screen ones. */
     private static final int KCG_WINDOW_LIST_OPTION_ALL = 0;
     /** {@code kCGNullWindowID}. */
     private static final int KCG_NULL_WINDOW_ID = 0;
@@ -37,9 +38,10 @@ public final class MacosSpotify {
     }
 
     /**
-     * Estado leído con una sola llamada nativa.
+     * State read with a single native call.
      *
-     * @return {@code null} si CoreGraphics no devolvió datos; el llamador debe volver al CLI
+     * @return {@code null} if CoreGraphics returned no data; the caller must fall back to
+     *         the CLI
      */
     public static SpotifyProcess.Snapshot read() {
         CFArrayRef windows = CG.CGWindowListCopyWindowInfo(KCG_WINDOW_LIST_OPTION_ALL, KCG_NULL_WINDOW_ID);
@@ -97,7 +99,7 @@ public final class MacosSpotify {
         }
     }
 
-    /** Funciones mínimas de CoreGraphics para listar ventanas (no vienen en jna-platform). */
+    /** Minimal CoreGraphics functions for listing windows (not in jna-platform). */
     private interface CoreGraphics extends Library {
         CoreGraphics INSTANCE = Native.load("CoreGraphics", CoreGraphics.class);
 

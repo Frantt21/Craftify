@@ -1,85 +1,86 @@
 # Craftify
 
-Sistema de dos componentes que muestra en el servidor de Minecraft **qué canción está
-sonando en Spotify** de cada jugador:
+A two-component system that shows **what song is playing on Spotify** for each player on a
+Minecraft server:
 
-| Componente | Carpeta | Qué hace |
+| Component | Folder | What it does |
 |------------|---------|----------|
-| **CraftifyMod** | [`CraftifyMod/`](CraftifyMod/) | Mod de Minecraft (Fabric, solo cliente): detecta Spotify en el SO del jugador, lee el título de la canción desde la ventana del proceso y lo envía al servidor. |
-| **CraftifyPlugin** | [`CraftifyPlugin/`](CraftifyPlugin/) | Plugin Paper del servidor: recibe el título, lo guarda por jugador y lo expone (holograma, comando). |
+| **CraftifyMod** | [`CraftifyMod/`](CraftifyMod/) | Minecraft mod (Fabric, client-only): detects Spotify on the player's OS, reads the song title from the process window and sends it to the server. |
+| **CraftifyPlugin** | [`CraftifyPlugin/`](CraftifyPlugin/) | Paper server plugin: receives the title, stores it per player and displays it (nametag, command). |
 
-El **contrato de comunicación** entre ambos — el formato exacto de los paquetes y cómo debe
-recibirlos el plugin — está definido en [`PROTOCOL.md`](PROTOCOL.md).
+The **communication contract** between both — the exact packet format and how the plugin
+must receive it — is defined in [`PROTOCOL.md`](PROTOCOL.md).
 
-## Cómo funciona
+## How it works
 
 ```
 ┌──────────────────────────────┐   craftify:title (custom_payload)   ┌──────────────────────────────┐
-│  Cliente: CraftifyMod        │ ─────────────────────────────────►  │  Servidor: CraftifyPlugin     │
+│  Client: CraftifyMod         │ ─────────────────────────────────►  │  Server: CraftifyPlugin      │
 │                              │                                     │                              │
-│  Detecta Spotify en el SO    │   {"state":"playing",               │  Guarda el estado por        │
-│  Lee el título de la ventana │    "track":"Canción - Artista",     │  jugador (UUID)              │
-│  Envía SOLO cuando cambia    │    "timestamp": ...}                │  Nametag + /nowplaying       │
-│  Ve su nombre en 3ª persona  │                                     │  (holograma opcional)        │
+│  Detects Spotify on the OS   │   {"state":"playing",               │  Stores the state per        │
+│  Reads the window title      │    "track":"Song - Artist",         │  player (UUID)               │
+│  Sends ONLY on changes       │    "timestamp": ...}                │  Nametag + /nowplaying       │
+│  Shows own name in 3rd person│                                     │  (hologram optional)         │
 └──────────────────────────────┘                                     └──────────────────────────────┘
 ```
 
-1. **El mod** corre en el cliente y es el único componente con acceso al sistema operativo
-   del jugador: detecta el proceso de Spotify (Windows/macOS/Linux) y lee el título de su
-   ventana, que cambia con cada canción (formato típico: `Canción - Artista`).
-2. **Solo cuando el estado cambia** (canción nueva, Spotify cerrado, etc.) envía un paquete
-   `minecraft:custom_payload` por el canal `craftify:title` con un JSON de tres campos:
-   `state`, `track` y `timestamp`.
-3. **El plugin** corre en el servidor, decodifica el payload y guarda el último estado por
-   jugador. Hoy ya lo expone en el **nombre flotante** del jugador (nametag: nombre +
-   canción, sin lag) y con el comando `/nowplaying`. Un **holograma** (`TextDisplay`)
-   sigue disponible como modo opcional.
-4. **El mod** además permite ver tu propio nombre en **tercera persona (F5)** — vanilla lo
-   oculta — así el jugador ve su nametag con la canción.
+1. **The mod** runs on the client and is the only component with access to the player's
+   operating system: it detects the Spotify process (Windows/macOS/Linux) and reads its
+   window title, which changes with each song (typically `Song - Artist`).
+2. **Only when the state changes** (new song, Spotify closed, etc.) it sends a
+   `minecraft:custom_payload` packet on the `craftify:title` channel with a three-field
+   JSON: `state`, `track` and `timestamp`.
+3. **The plugin** runs on the server, decodes the payload and keeps the latest state per
+   player. Today it displays it in the player's **floating nametag** (name + song, no lag)
+   and via the `/nowplaying` command. A **hologram** (`TextDisplay`) remains available as an
+   optional mode.
+4. **The mod** also lets you see your own name in **third person (F5)** — vanilla hides
+   it — so the player sees their nametag with the song.
 
-El mod **no interpreta la música** y el plugin **no toca el sistema operativo**: cada
-componente hace una sola cosa, y se comunican únicamente por el protocolo definido en
-[`PROTOCOL.md`](PROTOCOL.md).
+The mod does **not** interpret the music and the plugin does **not** touch the operating
+system: each component does one thing, and they communicate only through the protocol
+defined in [`PROTOCOL.md`](PROTOCOL.md).
 
-## Documentación por componente
+## Component documentation
 
-- **📄 [`CraftifyMod/README.md`](CraftifyMod/README.md)** — el mod: detección por sistema
-  operativo, requisitos, comandos (`/craftify spotify`, `/craftify send`), polling y costo
-  de la detección, compilación.
-- **📄 [`CraftifyPlugin/README.md`](CraftifyPlugin/README.md)** — el plugin: qué hace hoy
-  (recepción del canal, estado por jugador, holograma, `/nowplaying`), configuración y
-  compilación.
-- **📄 [`PROTOCOL.md`](PROTOCOL.md)** — el contrato entre ambos: formato exacto de los
-  bytes on-wire, los 3 estados posibles y cómo debe recibirlos/decodificarlos el plugin
-  (con ejemplos para Paper y Fabric).
+- **📄 [`CraftifyMod/README.md`](CraftifyMod/README.md)** — the mod: detection per OS,
+  requirements, commands (`/craftify spotify`, `/craftify send`), polling and detection
+  cost, build.
+- **📄 [`CraftifyPlugin/README.md`](CraftifyPlugin/README.md)** — the plugin: what it does
+  today (channel reception, per-player state, nametag, `/nowplaying`), configuration and
+  build.
+- **📄 [`PROTOCOL.md`](PROTOCOL.md)** — the contract between both: exact on-wire byte
+  format, the 3 possible states and how the plugin must receive/decode them (with Paper
+  and Fabric examples).
 
-## Estado actual
+## Current status
 
-- ✅ El mod detecta Spotify, envía `craftify:title` en cada cambio de estado y muestra el
-  propio nombre en tercera persona (F5).
-- ✅ El plugin Paper recibe el canal, guarda el estado por jugador y lo muestra en el
-  nametag del jugador (holograma opcional).
-- ⏳ Lógica de conversión en el plugin (chat, scoreboard, Discord, Twitch, etc.).
+- ✅ The mod detects Spotify, sends `craftify:title` on every state change and shows the
+  player's own name in third person (F5).
+- ✅ The Paper plugin receives the channel, stores the state per player and shows it in the
+  player's nametag (hologram optional).
+- ⏳ Conversion logic in the plugin (chat, scoreboard, Discord, Twitch, etc.).
 
-## Compilación rápida
+## Quick build
 
 ```bash
-# Mod (cliente)
+# Mod (client)
 cd CraftifyMod
 ./gradlew build        # → CraftifyMod/build/libs/CraftifyMod-1.0.0.jar
 
-# Plugin (servidor)
+# Plugin (server)
 cd CraftifyPlugin
 ./gradlew build        # → CraftifyPlugin/build/libs/CraftifyPlugin-1.0.0.jar
 ```
 
-El JAR del mod se instala en la carpeta `mods` del cliente; el del plugin, en `plugins/`
-del servidor Paper. Ambos proyectos usan el mismo wrapper de Gradle y el JDK 26 local
-(compilando apuntando a Java 25).
+The mod jar goes into the client's `mods` folder; the plugin jar into the server's
+`plugins` folder. Both projects use the same Gradle wrapper and the local JDK 26 (building
+against Java 25).
 
 ## Roadmap
 
-1. ✅ Detección del proceso de Spotify y lectura del título (`/craftify spotify`).
-2. ✅ Envío de paquetes `craftify:title` al servidor cuando el título cambie.
-3. ✅ (esqueleto) Plugin Paper que recibe el canal y guarda el estado por jugador + holograma.
-4. ⏳ Lógica de conversión en el plugin (chat, scoreboard, Discord, Twitch, etc.).
+1. ✅ Detect the Spotify process and read the title (`/craftify spotify`).
+2. ✅ Send `craftify:title` packets to the server when the title changes.
+3. ✅ (skeleton) Paper plugin that receives the channel and stores the state per player +
+   nametag/hologram.
+4. ⏳ Conversion logic in the plugin (chat, scoreboard, Discord, Twitch, etc.).

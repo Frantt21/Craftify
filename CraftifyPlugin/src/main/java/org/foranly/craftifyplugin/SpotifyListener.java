@@ -9,10 +9,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.logging.Logger;
 
 /**
- * Recibe el canal {@code craftify:title} (PROTOCOL.md §3.2).
+ * Receives the {@code craftify:title} channel (PROTOCOL.md §3.2).
  *
- * <p>Payload on-wire: {@code [VarInt longitud][bytes UTF-8 del JSON]}
- * (PROTOCOL.md §2.1). Se decodifica a mano para no depender del mod.
+ * <p>On-wire payload: {@code [VarInt length][UTF-8 bytes of the JSON]}
+ * (PROTOCOL.md §2.1). It is decoded manually so it does not depend on the mod.
  */
 public final class SpotifyListener implements PluginMessageListener {
 
@@ -40,17 +40,17 @@ public final class SpotifyListener implements PluginMessageListener {
             int[] offset = {0};
             int length = readVarInt(message, offset);
             if (length < 0 || offset[0] + length > message.length) {
-                throw new IllegalArgumentException("longitud " + length + " fuera de rango");
+                throw new IllegalArgumentException("length " + length + " out of range");
             }
             json = new String(message, offset[0], length, StandardCharsets.UTF_8);
         } catch (RuntimeException e) {
-            logger.warning("Payload craftify:title inválido de " + player.getName() + ": " + e.getMessage());
+            logger.warning("Invalid craftify:title payload from " + player.getName() + ": " + e.getMessage());
             return;
         }
 
         PlayerSpotifyState state = PlayerSpotifyState.fromJson(json);
         if (state == null) {
-            logger.warning("JSON craftify:title inválido de " + player.getName() + ": " + json);
+            logger.warning("Invalid craftify:title JSON from " + player.getName() + ": " + json);
             return;
         }
 
@@ -61,7 +61,7 @@ public final class SpotifyListener implements PluginMessageListener {
     }
 
     /**
-     * VarInt de Minecraft: 7 bits por grupo, el bit alto (0x80) indica que hay más bytes
+     * Minecraft VarInt: 7 bits per group, the high bit (0x80) means there are more bytes
      * (PROTOCOL.md §3.3).
      */
     private static int readVarInt(byte[] buf, int[] offset) {
@@ -74,10 +74,10 @@ public final class SpotifyListener implements PluginMessageListener {
                 return value;
             }
             if (shift >= 28) {
-                throw new IllegalArgumentException("VarInt demasiado largo");
+                throw new IllegalArgumentException("VarInt too long");
             }
             shift += 7;
         }
-        throw new IllegalArgumentException("VarInt sin terminar");
+        throw new IllegalArgumentException("Unterminated VarInt");
     }
 }

@@ -10,26 +10,26 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Detecta el proceso de Spotify que corre en el sistema operativo del jugador y
- * lee el título de su ventana, que cambia con cada canción.
+ * Detects the Spotify process running on the player's operating system and reads its
+ * window title, which changes with each song.
  *
- * <p>Cada sistema operativo usa un ejecutable distinto:
+ * <p>Each operating system uses a different executable:
  * <ul>
  *   <li>Windows: {@code Spotify.exe}</li>
  *   <li>macOS: {@code Spotify}</li>
  *   <li>Linux: {@code spotify}</li>
  * </ul>
  *
- * <p>En Windows se usa una sonda nativa (JNA/Win32) para no pagar el arranque de PowerShell
- * en cada consulta; si JNA falla, se vuelve a {@code tasklist} + PowerShell.
+ * <p>On Windows a native probe (JNA/Win32) is used to avoid paying for PowerShell startup
+ * on every query; if JNA fails, it falls back to {@code tasklist} + PowerShell.
  */
 public final class SpotifyProcess {
 
-    /** Resultado de una lectura: si Spotify está corriendo y, en ese caso, el título. */
+    /** Result of a read: whether Spotify is running and, if so, the title. */
     public record Snapshot(boolean running, String title) {
     }
 
-    /** Sistemas operativos soportados por el mod. */
+    /** Operating systems supported by the mod. */
     public enum Os {
         WINDOWS("Spotify.exe"),
         MACOS("Spotify"),
@@ -42,7 +42,7 @@ public final class SpotifyProcess {
             this.executable = executable;
         }
 
-        /** Nombre del ejecutable de Spotify en este sistema operativo, o {@code null} si no está soportado. */
+        /** Spotify executable name on this OS, or {@code null} if unsupported. */
         public String executable() {
             return executable;
         }
@@ -54,7 +54,7 @@ public final class SpotifyProcess {
     }
 
     /**
-     * Detecta el sistema operativo actual a partir de la propiedad del sistema {@code os.name}.
+     * Detects the current operating system from the {@code os.name} system property.
      */
     public static Os currentOs() {
         String osName = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
@@ -71,9 +71,9 @@ public final class SpotifyProcess {
     }
 
     /**
-     * Lee el estado de Spotify de una sola vez: si está corriendo y, en ese caso, el título.
-     * Una sola sonda por consulta (en Windows una llamada nativa, en macOS/Linux procesos
-     * ligeros) para que el polling sea barato.
+     * Reads the Spotify state in one go: whether it is running and, if so, the title.
+     * A single probe per query (a native call on Windows, light processes on macOS/Linux)
+     * so the polling stays cheap.
      */
     public static Snapshot readSnapshot(Os os) {
         return switch (os) {
@@ -84,15 +84,15 @@ public final class SpotifyProcess {
         };
     }
 
-    /** Indica si el proceso de Spotify está corriendo en el sistema operativo dado. */
+    /** Whether the Spotify process is running on the given OS. */
     public static boolean isRunning(Os os) {
         return readSnapshot(os).running();
     }
 
     /**
-     * Lee el título de Spotify, con formato "Canción - Artista".
+     * Reads the Spotify title, formatted as "Song - Artist".
      *
-     * @return el título actual, o {@code null} si no se pudo obtener
+     * @return the current title, or {@code null} if it could not be obtained
      */
     public static String readTitle(Os os) {
         return readSnapshot(os).title();
@@ -104,7 +104,7 @@ public final class SpotifyProcess {
         try {
             return WindowsSpotify.read();
         } catch (Throwable t) {
-            // JNA no disponible o falla: volver al CLI (lento, pero funcional).
+            // JNA unavailable or failing: fall back to the CLI (slow, but functional).
             return new Snapshot(isWindowsRunningCli(), readWindowsTitleCli());
         }
     }
@@ -129,13 +129,13 @@ public final class SpotifyProcess {
             jna = null;
         }
         if (jna == null) {
-            // JNA no disponible: CLI (pgrep + osascript).
+            // JNA unavailable: CLI (pgrep + osascript).
             return new Snapshot(isMacosRunningCli(), readMacosTitleCli());
         }
         if (jna.running() && jna.title() == null) {
-            // Sin título nativo (falta Grabación de Pantalla). De menor a mayor fricción:
-            // 1) diccionario AppleScript directo de Spotify (un único prompt de Automatización,
-            //    funciona aunque la ventana esté oculta); 2) System Events (Accesibilidad).
+            // No native title (missing Screen Recording). From least to most friction:
+            // 1) Spotify's own AppleScript dictionary (a single Automation prompt, works
+            //    even with the window hidden); 2) System Events (Accessibility).
             String title = readMacosTitleSpotifyDirect();
             if (title == null) {
                 title = readMacosTitleCli();
@@ -149,13 +149,13 @@ public final class SpotifyProcess {
         return !run("pgrep", "-x", "Spotify").isBlank();
     }
 
-    /** Título vía el diccionario AppleScript de la propia app de Spotify (sin Accesibilidad). */
+    /** Title via Spotify's own AppleScript dictionary (no Accessibility needed). */
     private static String readMacosTitleSpotifyDirect() {
         return firstNonBlankLine(run("osascript", "-e",
                 "tell application \"Spotify\" to get name of current track & \" - \" & artist of current track"));
     }
 
-    /** Título vía System Events (requiere Accesibilidad). Último recurso en macOS. */
+    /** Title via System Events (requires Accessibility). Last resort on macOS. */
     private static String readMacosTitleCli() {
         return firstNonBlankLine(run("osascript", "-e",
                 "tell application \"System Events\" to tell process \"Spotify\" to get name of front window"));
@@ -164,24 +164,25 @@ public final class SpotifyProcess {
     // --- Linux ---
 
     private static Snapshot readLinuxSnapshot() {
-        // 1) MPRIS vía playerctl: una sola invocación da running + título, sin depender de X11.
-        // Se usa el binario incluido en el mod (sin sudo); si no se pudo extraer, el del sistema.
+        // 1) MPRIS via playerctl: a single invocation gives running + title, no X11 needed.
+        // Uses the binary bundled in the mod (no sudo); if it could not be extracted, the
+        // system one.
         String playerctl = playerctlBinary();
         String mpris = firstNonBlankLine(run(playerctl, "--player=spotify", "metadata", "--format",
                 "{{ artist }} - {{ title }}"));
         if (mpris != null) {
             return new Snapshot(true, mpris);
         }
-        // 2) Fallback: pgrep (¿corre?) + título de la ventana con xdotool.
+        // 2) Fallback: pgrep (is it running?) + window title via xdotool.
         boolean running = !run("pgrep", "-x", "spotify").isBlank();
         String title = running ? readLinuxWindowTitle() : null;
         return new Snapshot(running, title);
     }
 
     /**
-     * Resuelve el binario de playerctl en Linux: primero el incluido en el JAR del mod
-     * (extraído al directorio temporal del usuario la primera vez, sin necesitar superusuario)
-     * y, si no está disponible, el instalado en el sistema ({@code playerctl} en el PATH).
+     * Resolves the playerctl binary on Linux: first the one bundled in the mod's JAR
+     * (extracted to the user's temp directory on first use, no root needed) and, if it is
+     * not available, the system-installed one ({@code playerctl} on the PATH).
      */
     private static String playerctlBinary() {
         String arch = linuxArch();
@@ -207,7 +208,7 @@ public final class SpotifyProcess {
         }
     }
 
-    /** Arquitectura del binario playerctl incluido (x86_64 por defecto). */
+    /** Architecture of the bundled playerctl binary (x86_64 by default). */
     private static String linuxArch() {
         String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
         if (arch.contains("aarch64") || arch.contains("arm64")) {
@@ -216,12 +217,12 @@ public final class SpotifyProcess {
         return "x86_64";
     }
 
-    /** Título de la ventana de Spotify en Linux vía {@code xdotool}. */
+    /** Spotify window title on Linux via {@code xdotool}. */
     private static String readLinuxWindowTitle() {
         return firstNonBlankLine(run("xdotool", "search", "--class", "spotify", "getwindowname", "%@"));
     }
 
-    // --- Utilidades ---
+    // --- Utilities ---
 
     private static String firstNonBlankLine(String output) {
         if (output == null || output.isBlank()) {
