@@ -23,6 +23,8 @@ public final class CraftifyPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        migrateConfig();
+
         stateManager = new SpotifyStateManager();
         nametags = new NametagManager(this);
         holograms = new HologramManager(this);
@@ -57,5 +59,20 @@ public final class CraftifyPlugin extends JavaPlugin {
     /** State access, in case another plugin component needs it. */
     public SpotifyStateManager getStateManager() {
         return stateManager;
+    }
+
+    /**
+     * Migrates old configs (pre-nametag versions): they had no {@code nametag} section and
+     * left {@code hologram.enabled: true}, so existing servers would keep the hologram on
+     * after updating. When the {@code nametag} key is missing, the default config is forced
+     * (nametag on, hologram off).
+     */
+    private void migrateConfig() {
+        if (!getConfig().contains("nametag")) {
+            saveResource("config.yml", true);
+            reloadConfig();
+            getLogger().info("Old config.yml detected: overwritten with the current defaults "
+                    + "(nametag mode enabled, hologram disabled).");
+        }
     }
 }
