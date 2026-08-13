@@ -16,6 +16,19 @@ Plugin **Paper** del servidor que recibe el canal `craftify:title` enviado por e
   - `closed` → Spotify cerrado
 - Limpia el estado al desconectar el jugador.
 - Comando `/nowplaying` para verificar el estado propio.
+- **Holograma** sobre el jugador con un icono de música y el título (solo con `playing`):
+  usa una entidad `TextDisplay` que sigue al jugador, sin dependencias externas. Visible
+  para todos los jugadores cercanos. Configurable en `config.yml` (`hologram.*`).
+
+## Configuración (`config.yml`)
+
+```yaml
+hologram:
+  enabled: true   # activa/desactiva el holograma
+  icon: "♪ "       # glifo del icono (fuente por defecto; probar "♫ " si no se ve)
+  height: 2.15    # altura sobre el jugador en bloques
+  scale: 0.6      # tamaño del texto
+```
 
 ## Requisitos
 
@@ -41,8 +54,9 @@ carpeta `plugins` del servidor.
 | `SpotifyListener` | `PluginMessageListener`: decodifica `craftify:title` (VarInt + UTF-8 + JSON) |
 | `PlayerSpotifyState` | Registro con `state`, `track`, `timestamp` + parseo del JSON |
 | `SpotifyStateManager` | Último estado por UUID del jugador (en memoria) |
-| `PlayerListener` | Limpia el estado al desconectar |
+| `PlayerListener` | Limpia el estado y el holograma al desconectar |
 | `command/NowPlayingCommand` | `/nowplaying`: muestra el estado propio |
+| `hologram/HologramManager` | Holograma `TextDisplay` sobre el jugador (icono + título) |
 
 ## Prueba rápida
 

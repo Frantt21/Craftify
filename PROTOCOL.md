@@ -300,9 +300,12 @@ El `timestamp` es epoch millis de la captura en el cliente. Úsalo para:
 - **`playing` ≠ reproduciendo:** el título de la ventana no cambia al pausar; el mod no
   distingue pausa/reproducción. Un futuro paquete con estado de reproducción (p. ej. vía MPRIS)
   es una extensión natural del protocolo.
-- **Permisos del SO (cliente):** en macOS leer el título de otra app requiere Grabación de
-  Pantalla (con Accesibilidad como fallback vía `osascript`); en Linux se prefiere `playerctl`
-  (MPRIS), con `xdotool` como respaldo.
+- **Permisos del SO (cliente):** en macOS detectar el proceso no requiere permisos; para el
+  título, el camino de menor fricción es el diccionario AppleScript de la propia app de
+  Spotify (un único prompt de Automatización), con Grabación de Pantalla y Accesibilidad
+  como alternativas. En Linux se prefiere `playerctl` (MPRIS, sin permisos; solo hay que
+  instalarlo), con `xdotool` como respaldo. La API local de Spotify (puerto 4380) ya no
+  existe en los clientes modernos.
 - **Ventana oculta por plataforma:** en Windows el título se sigue leyendo con Spotify
   minimizado o en la bandeja (por eso el plugin seguirá recibiendo `playing` aunque el
   jugador lo oculte). En macOS y Linux, si la ventana deja de ser legible, el mod pasa a

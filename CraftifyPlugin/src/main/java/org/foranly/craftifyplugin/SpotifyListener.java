@@ -2,6 +2,7 @@ package org.foranly.craftifyplugin;
 
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.messaging.PluginMessageListener;
+import org.foranly.craftifyplugin.hologram.HologramManager;
 
 import java.nio.charset.StandardCharsets;
 import java.util.logging.Logger;
@@ -15,10 +16,12 @@ import java.util.logging.Logger;
 public final class SpotifyListener implements PluginMessageListener {
 
     private final SpotifyStateManager stateManager;
+    private final HologramManager holograms;
     private final Logger logger;
 
-    public SpotifyListener(SpotifyStateManager stateManager, Logger logger) {
+    public SpotifyListener(SpotifyStateManager stateManager, HologramManager holograms, Logger logger) {
         this.stateManager = stateManager;
+        this.holograms = holograms;
         this.logger = logger;
     }
 
@@ -48,6 +51,7 @@ public final class SpotifyListener implements PluginMessageListener {
         }
 
         stateManager.update(player.getUniqueId(), state);
+        holograms.update(player, state);
         logger.fine(player.getName() + " → " + state);
     }
 

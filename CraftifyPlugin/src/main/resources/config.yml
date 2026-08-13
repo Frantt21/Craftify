@@ -1,0 +1,11 @@
+# Holograma sobre el jugador con el título de Spotify (solo cuando state = playing).
+hologram:
+  # Activa/desactiva el holograma.
+  enabled: true
+  # Glifo del icono de música (fuente por defecto de Minecraft). Si no se ve bien,
+  # probar "♫ " (U+266B) u otro.
+  icon: "♪ "
+  # Altura sobre el jugador, en bloques.
+  height: 2.15
+  # Tamaño del texto (escala de la entidad TextDisplay).
+  scale: 0.6

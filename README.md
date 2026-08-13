@@ -44,23 +44,26 @@ oculta conserva el texto; solo se descartan las ventanas auxiliares IME/GDI+).
 | SO      | Ejecutable    | Detección del proceso        | Lectura del título |
 |---------|---------------|------------------------------|--------------------|
 | Windows | `Spotify.exe` | JNA/Win32 (Toolhelp32) con fallback `tasklist` | JNA/Win32 (`EnumWindows` + `GetWindowText`) con fallback PowerShell |
-| macOS   | `Spotify`     | JNA/CoreGraphics (dueño de la ventana) con fallback `pgrep` | JNA/CoreGraphics (`CGWindowListCopyWindowInfo`) con fallback `osascript` |
+| macOS   | `Spotify`     | JNA/CoreGraphics (dueño de la ventana) con fallback `pgrep` | JNA/CoreGraphics → AppleScript de Spotify (Automatización) → `osascript` |
 | Linux   | `spotify`     | MPRIS/`playerctl` (implica corriendo); fallback `pgrep -x spotify` | MPRIS/`playerctl` (metadata) con fallback `xdotool` (ventana) |
 
 ### Requisitos por sistema operativo
 
 - **Windows**: usa una sonda nativa (JNA/Win32) sin permisos adicionales; PowerShell solo se
   usa como fallback si JNA no está disponible.
-- **macOS**: la sonda nativa (CoreGraphics) detecta el proceso sin permisos, pero leer el
-  **título** de la ventana de otra app requiere permiso de **Grabación de Pantalla**
-  (Ajustes del Sistema → Privacidad y seguridad → Grabación de pantalla). Si no se otorga,
-  el mod cae a `osascript` (que a su vez requiere **Accesibilidad**). Con cualquiera de los
-  dos permisos el título se lee; sin ambos, el estado queda como `no_track`.
+- **macOS**: detectar el proceso no requiere permisos. Para el **título**, el camino más
+  fácil es aceptar el aviso único **"controlar Spotify"** (Automatización) cuando aparezca
+  al entrar al juego — un clic, sin salir a Ajustes. Alternativas si se prefiere: permiso de
+  **Grabación de Pantalla** (Ajustes → Privacidad → Grabación de pantalla) o **Accesibilidad**
+  (último recurso). Con cualquiera de los tres el título se lee; sin ninguno, el estado queda
+  como `no_track`.
 - **Linux**: usa **MPRIS** vía `playerctl` (p. ej. `sudo apt install playerctl`,
   `sudo pacman -S playerctl`) como sonda principal: una sola invocación da el proceso y el
-  título, funciona con la ventana minimizada y no depende de X11/Wayland. Si `playerctl` no
-  está instalado o no responde, cae a `pgrep` + `xdotool` (p. ej. `sudo apt install xdotool`).
-  Spotify debe correr en la misma sesión gráfica del usuario.
+  título, funciona con la ventana minimizada, **sin permisos** y sin depender de X11/Wayland.
+  Si `playerctl` no está instalado o no responde, cae a `pgrep` + `xdotool` (p. ej.
+  `sudo apt install xdotool`). Es lo único que hay que instalar: la API local de Spotify
+  (puerto 4380) ya no existe en los clientes modernos, así que no hay forma de evitarlo sin
+  dependencias. Spotify debe correr en la misma sesión gráfica del usuario.
 
 ## Comandos
 

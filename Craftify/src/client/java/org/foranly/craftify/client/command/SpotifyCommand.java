@@ -75,6 +75,7 @@ public final class SpotifyCommand {
                 source.sendFeedback(Component.literal("[Craftify] Estado: ")
                         .withStyle(ChatFormatting.GOLD)
                         .append(Component.literal("sin canción activa (no_track)").withStyle(ChatFormatting.YELLOW)));
+                sendNoTrackHint(source, os);
             } else {
                 source.sendFeedback(Component.literal("[Craftify] Estado: ")
                         .withStyle(ChatFormatting.GOLD)
@@ -97,5 +98,21 @@ public final class SpotifyCommand {
                                 : Component.literal("activo (detección en tiempo real de cambios de canción)").withStyle(ChatFormatting.GREEN))
                         : Component.literal("inactivo (solo envía dentro de un mundo)").withStyle(ChatFormatting.GRAY)));
         return 1;
+    }
+
+    /** Pista de qué hacer cuando el título no se pudo leer, según el sistema operativo. */
+    private static void sendNoTrackHint(FabricClientCommandSource source, SpotifyProcess.Os os) {
+        Component hint = switch (os) {
+            case MACOS -> Component.literal("[Craftify] Para leer el título: acepta el aviso \"controlar Spotify\" "
+                    + "cuando aparezca (una vez), o concede Grabación de Pantalla.")
+                    .withStyle(ChatFormatting.GRAY);
+            case LINUX -> Component.literal("[Craftify] Sin título: instala playerctl (p. ej. sudo apt install playerctl) "
+                    + "o xdotool, y reinicia el juego.")
+                    .withStyle(ChatFormatting.GRAY);
+            default -> null;
+        };
+        if (hint != null) {
+            source.sendFeedback(hint);
+        }
     }
 }

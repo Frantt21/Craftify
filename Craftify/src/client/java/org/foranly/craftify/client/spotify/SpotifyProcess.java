@@ -129,8 +129,14 @@ public final class SpotifyProcess {
             return new Snapshot(isMacosRunningCli(), readMacosTitleCli());
         }
         if (jna.running() && jna.title() == null) {
-            // Corriendo pero sin título nativo (falta Grabación de Pantalla): probar osascript.
-            return new Snapshot(true, readMacosTitleCli());
+            // Sin título nativo (falta Grabación de Pantalla). De menor a mayor fricción:
+            // 1) diccionario AppleScript directo de Spotify (un único prompt de Automatización,
+            //    funciona aunque la ventana esté oculta); 2) System Events (Accesibilidad).
+            String title = readMacosTitleSpotifyDirect();
+            if (title == null) {
+                title = readMacosTitleCli();
+            }
+            return new Snapshot(true, title);
         }
         return jna;
     }
@@ -139,6 +145,13 @@ public final class SpotifyProcess {
         return !run("pgrep", "-x", "Spotify").isBlank();
     }
 
+    /** Título vía el diccionario AppleScript de la propia app de Spotify (sin Accesibilidad). */
+    private static String readMacosTitleSpotifyDirect() {
+        return firstNonBlankLine(run("osascript", "-e",
+                "tell application \"Spotify\" to get name of current track & \" - \" & artist of current track"));
+    }
+
+    /** Título vía System Events (requiere Accesibilidad). Último recurso en macOS. */
     private static String readMacosTitleCli() {
         return firstNonBlankLine(run("osascript", "-e",
                 "tell application \"System Events\" to tell process \"Spotify\" to get name of front window"));
