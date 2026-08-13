@@ -7,10 +7,13 @@ import com.sun.jna.platform.win32.Kernel32;
 import com.sun.jna.platform.win32.User32;
 import com.sun.jna.platform.win32.WinDef;
 import com.sun.jna.platform.win32.WinNT;
+import com.sun.jna.ptr.IntByReference;
 import com.sun.jna.win32.StdCallLibrary;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Sonda nativa (JNA/Win32) para Windows: detecta Spotify.exe y lee el título de su ventana
@@ -21,11 +24,15 @@ import java.util.List;
  * nativas del orden de milisegundos en total:
  *
  * <ol>
- *   <li>Toolhelp32: busca un proceso cuyo ejecutable sea {@code Spotify.exe} (funciona aunque
- *       Spotify esté minimizado a la bandeja, sin ventana).</li>
- *   <li>EnumWindows: encuentra la ventana visible de ese proceso y lee su título con
- *       {@code GetWindowText}.</li>
+ *   <li>Toolhelp32: PIDs de los procesos {@code Spotify.exe} (funciona aunque Spotify esté
+ *       minimizado a la bandeja, sin ventana).</li>
+ *   <li>EnumWindows: busca una ventana visible cuyo PID pertenezca a Spotify y lee su título
+ *       con {@code GetWindowText}.</li>
  * </ol>
+ *
+ * <p><b>Importante:</b> la ventana se identifica por PID ({@code GetWindowThreadProcessId})
+ * y <b>no</b> por {@code GetWindowModuleFileName}: esa función devuelve 0 para muchas
+ * ventanas (incluidas las de Spotify) y hacía que el título nunca se leyera.
  */
 public final class WindowsSpotify {
 
@@ -41,63 +48,60 @@ public final class WindowsSpotify {
      *         el llamador debe volver al CLI en ese caso
      */
     public static SpotifyProcess.Snapshot read() {
-        boolean running = isAnySpotifyProcessRunning();
-        return new SpotifyProcess.Snapshot(running, running ? windowTitle() : null);
+        Set<Integer> pids = spotifyPids();
+        boolean running = !pids.isEmpty();
+        return new SpotifyProcess.Snapshot(running, running ? windowTitle(pids) : null);
     }
 
-    // --- Toolhelp32: ¿está corriendo Spotify.exe? ---
+    // --- Toolhelp32: PIDs de Spotify.exe ---
 
-    private static boolean isAnySpotifyProcessRunning() {
+    private static Set<Integer> spotifyPids() {
+        Set<Integer> pids = new HashSet<>();
         WinNT.HANDLE snapshot = Kernel32.INSTANCE.CreateToolhelp32Snapshot(
                 new WinDef.DWORD(TlHelp32.TH32CS_SNAPPROCESS), new WinDef.DWORD(0));
         if (snapshot == null || WinNT.INVALID_HANDLE_VALUE.equals(snapshot)) {
-            return false;
+            return pids;
         }
         try {
             TlHelp32.PROCESSENTRY32W entry = new TlHelp32.PROCESSENTRY32W();
             entry.dwSize = entry.size();
             if (!TlHelp32.INSTANCE.Process32FirstW(snapshot, entry)) {
-                return false;
+                return pids;
             }
             do {
                 String exe = new String(entry.szExeFile, 0, indexOfNul(entry.szExeFile));
                 if ("Spotify.exe".equalsIgnoreCase(exe)) {
-                    return true;
+                    pids.add(entry.th32ProcessID);
                 }
             } while (TlHelp32.INSTANCE.Process32NextW(snapshot, entry));
-            return false;
+            return pids;
         } finally {
             Kernel32.INSTANCE.CloseHandle(snapshot);
         }
     }
 
-    // --- User32: título de la ventana ---
+    // --- User32: título de la ventana (por PID) ---
 
-    private static String windowTitle() {
+    private static String windowTitle(Set<Integer> spotifyPids) {
         final String[] found = new String[1];
         User32.INSTANCE.EnumWindows((hWnd, userData) -> {
+            IntByReference pid = new IntByReference();
+            User32.INSTANCE.GetWindowThreadProcessId(hWnd, pid);
+            if (!spotifyPids.contains(pid.getValue())) {
+                return true;
+            }
             if (!User32.INSTANCE.IsWindowVisible(hWnd)) {
                 return true;
             }
-            char[] module = new char[MAX_PATH];
-            int moduleLength = User32.INSTANCE.GetWindowModuleFileName(hWnd, module, module.length);
-            if (moduleLength > 0 && isSpotifyExecutable(module, moduleLength)) {
-                char[] buffer = new char[2048];
-                int length = User32.INSTANCE.GetWindowText(hWnd, buffer, buffer.length);
-                if (length > 0) {
-                    found[0] = new String(buffer, 0, length);
-                    return false; // detener la enumeración
-                }
+            char[] buffer = new char[2048];
+            int length = User32.INSTANCE.GetWindowText(hWnd, buffer, buffer.length);
+            if (length > 0) {
+                found[0] = new String(buffer, 0, length);
+                return false; // detener la enumeración
             }
             return true;
         }, null);
         return found[0];
-    }
-
-    private static boolean isSpotifyExecutable(char[] module, int length) {
-        String path = new String(module, 0, length);
-        String exe = path.substring(Math.max(0, path.lastIndexOf('\\') + 1));
-        return "Spotify.exe".equalsIgnoreCase(exe);
     }
 
     private static int indexOfNul(char[] chars) {
