@@ -4,14 +4,16 @@ Este documento es el **contrato entre el mod (cliente) y el plugin (servidor)**.
 mod detecta y envía el estado de Spotify, el formato exacto de los bytes que viajan por la red,
 y cómo el plugin debe recibirlos y usarlos.
 
-- **Emisor:** mod Craftify (solo cliente, Fabric).
-- **Receptor:** plugin del servidor (en desarrollo). Puede ser un mod Fabric del servidor o un
-  plugin Paper/Bukkit — el formato está pensado para que cualquiera de los dos lo decodifique.
+- **Emisor:** mod CraftifyMod (solo cliente, Fabric) — ver [`CraftifyMod/README.md`](CraftifyMod/README.md).
+- **Receptor:** plugin del servidor — ver [`CraftifyPlugin/README.md`](CraftifyPlugin/README.md)
+  (Paper; también puede ser un mod Fabric del servidor — el formato está pensado para que
+  cualquiera de los dos lo decodifique).
 - **Dirección:** cliente → servidor. Unidireccional; hoy no hay paquetes de vuelta.
+- **Documentación general del sistema:** [`README.md`](README.md).
 
 ```
 ┌───────────────────────────────┐   minecraft:custom_payload   ┌───────────────────────────────┐
-│  Cliente: mod Craftify        │ ───────────────────────────►  │  Servidor: plugin (futuro)    │
+│  Cliente: mod CraftifyMod     │ ───────────────────────────►  │  Servidor: plugin (futuro)    │
 │                               │   canal "craftify:title"     │                               │
 │  - Detecta Spotify en el SO   │   payload: JSON UTF-8        │  - Recibe el estado por       │
 │  - Lee el título de la canción│                              │    jugador                     │

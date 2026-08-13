@@ -3,7 +3,7 @@
 # release de GitHub y lo coloca en las resources del mod para que se incluya en el JAR.
 # Así, en Linux el jugador NO necesita instalar nada con sudo.
 #
-# Uso (desde la raíz del proyecto Craftify):
+# Uso (desde la raíz del proyecto CraftifyMod):
 #   bash scripts/fetch-linux-playerctl.sh
 #
 # Para otras arquitecturas (p. ej. aarch64), deja el binario en:

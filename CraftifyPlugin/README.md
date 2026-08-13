@@ -1,10 +1,12 @@
 # CraftifyPlugin
 
 Plugin **Paper** del servidor que recibe el canal `craftify:title` enviado por el mod
-**Craftify** (cliente, en `../Craftify`) y guarda el estado de Spotify de cada jugador.
+**CraftifyMod** (cliente, en [`../CraftifyMod/`](../CraftifyMod/)) y guarda el estado de
+Spotify de cada jugador.
 
 > 📄 **Contrato completo:** [`../PROTOCOL.md`](../PROTOCOL.md) — formato on-wire, decodificación
 > y recomendaciones de uso. Este plugin es la implementación del lado servidor.
+> 📄 **Documentación general del sistema:** [`../README.md`](../README.md).
 
 ## Qué hace (esqueleto)
 
@@ -34,7 +36,7 @@ hologram:
 
 - Servidor **Paper** (o compatible) para Minecraft 26.2.
 - Java 21+ (compilado apuntando a Java 25, igual que el mod).
-- En el **cliente** de cada jugador: el mod Craftify instalado (sin el mod, el canal no existe).
+- En el **cliente** de cada jugador: el mod CraftifyMod instalado (sin el mod, el canal no existe).
 
 ## Compilación
 
@@ -44,7 +46,7 @@ cd CraftifyPlugin
 ```
 
 El JAR queda en `CraftifyPlugin/build/libs/CraftifyPlugin-1.0.0.jar` y se instala en la
-carpeta `plugins` del servidor.
+carpeta `plugins` del servidor Paper.
 
 ## Estructura
 
