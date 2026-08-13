@@ -35,9 +35,9 @@ player's Spotify state.
 
 The plugin **generates `config.yml` automatically** in `plugins/CraftifyPlugin/` on the
 first start (and overwrites it if an old pre-nametag version is detected). On startup it
-prints a banner with the channel, the version and the activation state of each display
-mode (plain text on purpose: legacy `§` codes render literally on consoles that don't
-convert them to ANSI; the in-game colors come from the MiniMessage format).
+prints a **colored banner** directly to the console (ANSI escape codes via
+`Bukkit.getConsoleSender()`): channel, version and the activation state of each display
+mode. The in-game colors come from the MiniMessage format below.
 
 ```yaml
 nametag:
@@ -59,6 +59,22 @@ hologram:
 The name tag renders as `prefix + name + suffix` on a single line (vanilla does not
 render multi-line player name tags). With a `state` other than `playing` (or no title)
 the prefix/suffix are cleared and the nametag goes back to normal.
+
+### Supported colors and formats (MiniMessage)
+
+The `prefix` and `suffix` values use Adventure MiniMessage. Named colors:
+
+`<black>` `<dark_blue>` `<dark_green>` `<dark_aqua>` `<dark_red>` `<dark_purple>` `<gold>` `<gray>` `<dark_gray>` `<blue>` `<green>` `<aqua>` `<red>` `<light_purple>` `<yellow>` `<white>`
+
+Also supported:
+
+- `<color:#RRGGBB>` — any hex color, e.g. `<color:#ffaa00>`.
+- `<bold>`, `<italic>`, `<underlined>`, `<strikethrough>`, `<obfuscated>`, `<reset>` —
+  formatting.
+- `<newline>` / `<br>` — line break. Note: vanilla renders player name tags on a single
+  line, so a newline inside the nametag will not create a visible second line.
+
+Formatting tags must be closed: `<green>text</green>`, `<bold>text</bold>`.
 
 ## Commands and permissions
 

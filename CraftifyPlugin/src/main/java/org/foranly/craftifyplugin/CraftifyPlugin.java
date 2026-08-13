@@ -1,5 +1,6 @@
 package org.foranly.craftifyplugin;
 
+import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.foranly.craftifyplugin.command.CraftifyCommand;
 import org.foranly.craftifyplugin.command.NowPlayingCommand;
@@ -18,6 +19,16 @@ public final class CraftifyPlugin extends JavaPlugin {
     public static final String CHANNEL = "craftify:title";
 
     private static final String SEPARATOR = "==================================================";
+
+    // ANSI colors for the console banner (printed with Bukkit.getConsoleSender(), so they
+    // are NOT converted/stripped; require a console that supports ANSI).
+    private static final String ANSI_RESET = "\u001B[0m";
+    private static final String ANSI_RED = "\u001B[31m";
+    private static final String ANSI_GREEN = "\u001B[32m";
+    private static final String ANSI_YELLOW = "\u001B[33m";
+    private static final String ANSI_PURPLE = "\u001B[35m";
+    private static final String ANSI_CYAN = "\u001B[36m";
+    private static final String ANSI_GRAY = "\u001B[37m";
 
     private SpotifyStateManager stateManager;
     private HologramManager holograms;
@@ -122,26 +133,31 @@ public final class CraftifyPlugin extends JavaPlugin {
     }
 
     /**
-     * Prints a startup banner with the channel and the activation states. Plain text
-     * on purpose: legacy {@code \u00a7} color codes render literally on consoles that
-     * don't convert them to ANSI. In-game colors (the nametag) come from MiniMessage.
+     * Prints a colored startup banner directly to the console with ANSI escape codes
+     * (via {@link Bukkit#getConsoleSender()}, so the codes are not stripped). Consoles
+     * that support ANSI will show the colors; the in-game colors (the nametag) come from
+     * the MiniMessage format in {@code config.yml}.
      */
     private void logStartup(boolean migrated, long started) {
         long ms = System.currentTimeMillis() - started;
-        getLogger().info(SEPARATOR);
-        getLogger().info("CraftifyPlugin " + getPluginMeta().getVersion());
-        getLogger().info("Channel: " + CHANNEL + " (client → server, see PROTOCOL.md)");
+        banner(ANSI_PURPLE + SEPARATOR + ANSI_RESET);
+        banner(ANSI_CYAN + "CraftifyPlugin " + ANSI_RESET + getPluginMeta().getVersion());
+        banner(ANSI_GRAY + "Channel: " + ANSI_RESET + CHANNEL + ANSI_GRAY + " (client → server, see PROTOCOL.md)" + ANSI_RESET);
         if (migrated) {
-            getLogger().info("Old config.yml detected → overwritten with current defaults.");
+            banner(ANSI_YELLOW + "Old config.yml detected → overwritten with current defaults." + ANSI_RESET);
         }
-        getLogger().info("Nametag: " + status(nametags != null && nametags.isEnabled()));
-        getLogger().info("Hologram: " + status(holograms != null && holograms.isEnabled()));
-        getLogger().info("Commands: /nowplaying, /craftifyplugin reload");
-        getLogger().info(SEPARATOR);
-        getLogger().info("CraftifyPlugin enabled in " + ms + " ms");
+        banner(ANSI_GRAY + "Nametag: " + ANSI_RESET + status(nametags != null && nametags.isEnabled()));
+        banner(ANSI_GRAY + "Hologram: " + ANSI_RESET + status(holograms != null && holograms.isEnabled()));
+        banner(ANSI_GRAY + "Commands: " + ANSI_RESET + "/nowplaying, /craftifyplugin reload");
+        banner(ANSI_PURPLE + SEPARATOR + ANSI_RESET);
+        banner(ANSI_GREEN + "CraftifyPlugin enabled in " + ms + " ms" + ANSI_RESET);
+    }
+
+    private void banner(String message) {
+        Bukkit.getConsoleSender().sendMessage(message);
     }
 
     private String status(boolean enabled) {
-        return enabled ? "ENABLED" : "DISABLED";
+        return enabled ? ANSI_GREEN + "ENABLED" + ANSI_RESET : ANSI_RED + "DISABLED" + ANSI_RESET;
     }
 }
