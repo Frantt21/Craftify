@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "craftify",
+  "version": "${version}",
+  "name": "Craftify",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "GPL-3.0",
+  "icon": "assets/craftify/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-datagen": [
+      "org.foranly.craftify.client.CraftifyDataGenerator"
+    ],
+    "client": [
+      "org.foranly.craftify.client.CraftifyClient"
+    ],
+    "main": [
+      "org.foranly.craftify.Craftify"
+    ]
+  },
+  "mixins": [
+    "craftify.mixins.json",
+    {
+      "config": "craftify.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
