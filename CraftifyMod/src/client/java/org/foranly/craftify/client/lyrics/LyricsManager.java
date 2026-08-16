@@ -11,6 +11,8 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.resources.Identifier;
 import org.foranly.craftify.client.network.SpotifyTitlePayload;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Client-side synchronized lyrics overlay backed by LRCLib.
@@ -28,6 +30,8 @@ import org.foranly.craftify.client.network.SpotifyTitlePayload;
  */
 public final class LyricsManager {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger("craftify");
+
     private static final int CACHE_MAX = 24;
     private static final long NEGATIVE_CACHE_MS = 10 * 60 * 1000L;
 
@@ -43,11 +47,13 @@ public final class LyricsManager {
     private static final class CacheEntry {
         final List<LyricLine> lines;
         final boolean instrumental;
+        final String detail;
         final long fetchedAt;
 
-        CacheEntry(List<LyricLine> lines, boolean instrumental) {
+        CacheEntry(List<LyricLine> lines, boolean instrumental, String detail) {
             this.lines = lines;
             this.instrumental = instrumental;
+            this.detail = detail;
             this.fetchedAt = System.currentTimeMillis();
         }
     }
@@ -62,6 +68,17 @@ public final class LyricsManager {
     private volatile long songStartMillis;
     private volatile boolean paused;
     private volatile int frozenIndex = -1;
+
+    /** One of: "" (no track), "loading", "loaded", "not_found", "instrumental". */
+    private volatile String fetchStatus = "";
+    /** Human-readable detail of the last fetch (result or error). */
+    private volatile String lastDetail = "";
+    /** The last song queried (diagnostics). */
+    private volatile String lastQuery = "";
+    /** How many times the HUD element has been extracted (diagnostics). */
+    private volatile int renderCount;
+    /** Whether the overlay has drawn at least one frame (diagnostics). */
+    private volatile boolean firstFrameLogged;
 
     private LyricsManager() {
         HudElementRegistry.addFirst(Identifier.fromNamespaceAndPath("craftify", "lyrics"),
@@ -95,7 +112,11 @@ public final class LyricsManager {
     }
 
     private void onPlaying(String track) {
-        String key = track == null ? "" : track;
+        String key = track == null ? "" : track.strip();
+        if (key.isEmpty()) {
+            onHidden();
+            return;
+        }
         if (!key.equals(currentTrack)) {
             currentTrack = key;
             songStartMillis = System.currentTimeMillis();
@@ -122,18 +143,25 @@ public final class LyricsManager {
         instrumental = false;
         paused = false;
         frozenIndex = -1;
+        fetchStatus = "";
+        lastDetail = "";
+        lastQuery = "";
     }
 
     // --- Lyrics loading and cache ---
 
     private void load(String key) {
+        fetchStatus = "loading";
+        lastQuery = key;
+        lastDetail = "";
+        LOGGER.info("Lyrics: fetching \"{}\" from LRCLib", key);
         synchronized (cache) {
             CacheEntry entry = cache.get(key);
             if (entry != null) {
                 boolean staleNegative = !entry.instrumental && entry.lines.isEmpty()
                         && System.currentTimeMillis() - entry.fetchedAt > NEGATIVE_CACHE_MS;
                 if (!staleNegative) {
-                    apply(entry);
+                    apply(entry, key);
                     return;
                 }
             }
@@ -145,7 +173,7 @@ public final class LyricsManager {
                 return;
             }
             synchronized (cache) {
-                CacheEntry entry = new CacheEntry(result.lines(), result.instrumental());
+                CacheEntry entry = new CacheEntry(result.lines(), result.instrumental(), result.detail());
                 cache.put(key, entry);
                 while (cache.size() > CACHE_MAX) {
                     java.util.Iterator<Map.Entry<String, CacheEntry>> evict = cache.entrySet().iterator();
@@ -154,19 +182,31 @@ public final class LyricsManager {
                 }
             }
             if (key.equals(currentTrack)) {
-                apply(new CacheEntry(result.lines(), result.instrumental()));
+                apply(new CacheEntry(result.lines(), result.instrumental(), result.detail()), key);
             }
         });
     }
 
-    private void apply(CacheEntry entry) {
+    private void apply(CacheEntry entry, String key) {
         lines = entry.lines;
         instrumental = entry.instrumental;
+        lastDetail = entry.detail == null ? "" : entry.detail;
+        if (entry.instrumental) {
+            fetchStatus = "instrumental";
+            LOGGER.info("Lyrics: \"{}\" is instrumental ({})", key, lastDetail);
+        } else if (entry.lines.isEmpty()) {
+            fetchStatus = "not_found";
+            LOGGER.warn("Lyrics: no synced lyrics for \"{}\": {}", key, lastDetail);
+        } else {
+            fetchStatus = "loaded";
+            LOGGER.info("Lyrics: loaded {} line(s) for \"{}\" ({})", entry.lines.size(), key, lastDetail);
+        }
     }
 
     // --- Rendering (render thread) ---
 
     private void render(GuiGraphicsExtractor extractor) {
+        renderCount++;
         if (!enabled || currentTrack == null || Minecraft.getInstance().gui.hud.isHidden()) {
             return;
         }
@@ -207,6 +247,48 @@ public final class LyricsManager {
             }
         }
         drawBlock(extractor, font, centerX, bottomY, "♪ " + currentTrack, shown, colors);
+        if (!firstFrameLogged) {
+            firstFrameLogged = true;
+            LOGGER.info("Lyrics: overlay drawing ({} line(s) loaded)", lyricLines.size());
+        }
+    }
+
+    // --- Diagnostics for /craftify spotify ---
+
+    /** One of: "", "loading", "loaded", "not_found", "instrumental". */
+    public String fetchStatus() {
+        return fetchStatus;
+    }
+
+    /** Current song the lyrics refer to, or {@code null}. */
+    public String currentTrack() {
+        return currentTrack;
+    }
+
+    /** Last song queried (diagnostics). */
+    public String lastQuery() {
+        return lastQuery;
+    }
+
+    /** Human-readable detail of the last fetch: match, error or reason (diagnostics). */
+    public String lastDetail() {
+        return lastDetail;
+    }
+
+    /** Number of synced lines loaded, or -1 if none. */
+    public int linesLoaded() {
+        List<LyricLine> current = lines;
+        return current == null ? -1 : current.size();
+    }
+
+    /** Whether the overlay is instrumental. */
+    public boolean instrumental() {
+        return instrumental;
+    }
+
+    /** How many times the HUD element was extracted (diagnostics). */
+    public int renderCount() {
+        return renderCount;
     }
 
     /** Draws the subtitle block: header + stacked lines with a shared backdrop. */

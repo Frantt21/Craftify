@@ -1,11 +1,17 @@
 package org.foranly.craftify.client.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import java.util.List;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import org.foranly.craftify.client.lyrics.LrclibClient;
+import org.foranly.craftify.client.lyrics.LrclibClient.SearchCandidate;
+import org.foranly.craftify.client.lyrics.LrclibClient.SearchOutcome;
 import org.foranly.craftify.client.lyrics.LyricsManager;
 import org.foranly.craftify.client.spotify.SpotifyProcess;
 import org.foranly.craftify.client.spotify.SpotifyTracker;
@@ -36,7 +42,12 @@ public final class SpotifyCommand {
                         .then(ClientCommands.literal("off")
                                 .executes(ctx -> setLyrics(ctx, false)))
                         .then(ClientCommands.literal("toggle")
-                                .executes(ctx -> setLyrics(ctx, !LyricsManager.instance().isEnabled())))));
+                                .executes(ctx -> setLyrics(ctx, !LyricsManager.instance().isEnabled())))
+                        .then(ClientCommands.literal("search")
+                                .executes(ctx -> searchLyrics(ctx, null))
+                                .then(ClientCommands.argument("query", StringArgumentType.greedyString())
+                                        .executes(ctx -> searchLyrics(ctx,
+                                                StringArgumentType.getString(ctx, "query")))))));
     }
 
     private static int setSending(CommandContext<FabricClientCommandSource> context, boolean paused) {
@@ -54,6 +65,123 @@ public final class SpotifyCommand {
                     .withStyle(ChatFormatting.GRAY));
         }
         return 1;
+    }
+
+    /** Shows the lyrics overlay state (enabled, track, fetch result, rendering). */
+    private static void sendLyricsStatus(FabricClientCommandSource source) {
+        LyricsManager lyrics = LyricsManager.instance();
+        source.sendFeedback(Component.literal("[Craftify] Lyrics: ")
+                .withStyle(ChatFormatting.GOLD)
+                .append(Component.literal(lyrics.isEnabled() ? "enabled (LRCLib)" : "disabled (/craftify lyrics on)")
+                        .withStyle(lyrics.isEnabled() ? ChatFormatting.GREEN : ChatFormatting.GRAY)));
+
+        String track = lyrics.currentTrack();
+        String status = lyrics.fetchStatus();
+        if (track == null) {
+            source.sendFeedback(Component.literal("[Craftify] Lyrics track: ")
+                    .withStyle(ChatFormatting.GOLD)
+                    .append(Component.literal("waiting for a playing song").withStyle(ChatFormatting.GRAY)));
+            return;
+        }
+        source.sendFeedback(Component.literal("[Craftify] Lyrics track: ")
+                .withStyle(ChatFormatting.GOLD)
+                .append(Component.literal(track).withStyle(ChatFormatting.WHITE)));
+
+        String fetchText = switch (status) {
+            case "loading" -> "loading lyrics...";
+            case "loaded" -> lyrics.linesLoaded() + " synced line(s) loaded";
+            case "instrumental" -> "instrumental (no lyrics)";
+            case "not_found" -> "no synced lyrics found (LRCLib)";
+            default -> "no lyrics loaded";
+        };
+        source.sendFeedback(Component.literal("[Craftify] Lyrics state: ")
+                .withStyle(ChatFormatting.GOLD)
+                .append(Component.literal(fetchText)
+                        .withStyle("loaded".equals(status) ? ChatFormatting.GREEN : ChatFormatting.YELLOW)));
+
+        if (!lyrics.lastDetail().isEmpty()) {
+            source.sendFeedback(Component.literal("[Craftify] Lyrics detail: ")
+                    .withStyle(ChatFormatting.GOLD)
+                    .append(Component.literal(lyrics.lastDetail()).withStyle(ChatFormatting.GRAY)));
+        }
+
+        // If the overlay never renders, the problem is on the HUD side, not the data.
+        source.sendFeedback(Component.literal("[Craftify] Lyrics overlay: ")
+                .withStyle(ChatFormatting.GOLD)
+                .append(lyrics.renderCount() > 0
+                        ? Component.literal("rendering (" + lyrics.renderCount() + " frames)").withStyle(ChatFormatting.GREEN)
+                        : Component.literal("not rendering (HUD element never called)").withStyle(ChatFormatting.RED)));
+    }
+
+    /**
+     * {@code /craftify lyrics search [query]} — searches LRCLib and lists the candidates
+     * so a miss can be debugged (what the API returns vs what the auto-match expected).
+     * Without arguments it uses the currently detected song.
+     */
+    private static int searchLyrics(CommandContext<FabricClientCommandSource> context, String query) {
+        FabricClientCommandSource source = context.getSource();
+        String finalQuery = query;
+        if (finalQuery == null || finalQuery.isBlank()) {
+            String track = LyricsManager.instance().currentTrack();
+            if (track == null) {
+                source.sendError(Component.literal("[Craftify] No song detected and no query given. "
+                        + "Usage: /craftify lyrics search <song artist>").withStyle(ChatFormatting.RED));
+                return 0;
+            }
+            finalQuery = track.replace(" - ", " ");
+        }
+
+        String usedQuery = finalQuery;
+        source.sendFeedback(Component.literal("[Craftify] Searching LRCLib for: ")
+                .withStyle(ChatFormatting.GOLD)
+                .append(Component.literal(usedQuery).withStyle(ChatFormatting.WHITE)));
+
+        LrclibClient.searchAsync(usedQuery).whenComplete((outcome, error) ->
+                Minecraft.getInstance().execute(() -> showSearchResults(source, usedQuery, outcome, error)));
+        return 1;
+    }
+
+    private static void showSearchResults(FabricClientCommandSource source, String query,
+                                          SearchOutcome outcome, Throwable error) {
+        if (error != null) {
+            source.sendError(Component.literal("[Craftify] Search failed: " + error.getMessage())
+                    .withStyle(ChatFormatting.RED));
+            return;
+        }
+        if (outcome.error() != null) {
+            source.sendError(Component.literal("[Craftify] Search error: " + outcome.error())
+                    .withStyle(ChatFormatting.RED));
+            return;
+        }
+        List<SearchCandidate> candidates = outcome.candidates();
+        if (candidates.isEmpty()) {
+            source.sendError(Component.literal("[Craftify] No results for: " + query).withStyle(ChatFormatting.RED));
+            return;
+        }
+        source.sendFeedback(Component.literal("[Craftify] " + candidates.size() + " result(s):")
+                .withStyle(ChatFormatting.GOLD));
+        int shown = Math.min(candidates.size(), 8);
+        for (int i = 0; i < shown; i++) {
+            SearchCandidate candidate = candidates.get(i);
+            String tags = candidate.instrumental()
+                    ? "[instrumental]"
+                    : candidate.hasSyncedLyrics()
+                            ? "[synced " + formatDuration(candidate.durationSeconds()) + "]"
+                            : candidate.hasPlainLyrics()
+                                    ? "[plain only]"
+                                    : "[]";
+            source.sendFeedback(Component.literal("[Craftify]   " + (i + 1) + ". "
+                    + candidate.trackName() + " - " + candidate.artistName() + " " + tags)
+                    .withStyle(candidate.hasSyncedLyrics() ? ChatFormatting.GREEN : ChatFormatting.GRAY));
+        }
+        if (candidates.size() > shown) {
+            source.sendFeedback(Component.literal("[Craftify]   ... and " + (candidates.size() - shown) + " more")
+                    .withStyle(ChatFormatting.GRAY));
+        }
+    }
+
+    private static String formatDuration(int seconds) {
+        return (seconds / 60) + ":" + String.format(java.util.Locale.ROOT, "%02d", seconds % 60);
     }
 
     private static int setLyrics(CommandContext<FabricClientCommandSource> context, boolean enabled) {
@@ -108,6 +236,8 @@ public final class SpotifyCommand {
                     .withStyle(ChatFormatting.GOLD)
                     .append(Component.literal("Spotify closed (closed)").withStyle(ChatFormatting.RED)));
         }
+
+        sendLyricsStatus(source);
 
         source.sendFeedback(Component.literal("[Craftify] Packet sending: ")
                 .withStyle(ChatFormatting.GOLD)

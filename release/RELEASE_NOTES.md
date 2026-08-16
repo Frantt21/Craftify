@@ -4,7 +4,7 @@ Minecraft mod + server plugin that shows the song the player is listening to on 
 
 ## What's included
 
-- **CraftifyMod 1.0.1** — detects Spotify natively on Windows (JNA), macOS (AppleScript), and Linux (MPRIS/playerctl, with xdotool fallback), reading both the **song title** and the **pause state** (`playing` / `paused` / `no_track` / `closed`), and sends a `craftify:title` plugin message to the server whenever the state changes (polling every 500 ms with native probes, near-zero CPU cost). Includes a mixin so players can see their own nametag in third-person (F5).
+- **CraftifyMod 1.0.1** — detects Spotify natively on Windows (JNA), macOS (AppleScript), and Linux (MPRIS/playerctl, with xdotool fallback), reading both the **song title** and the **pause state** (`playing` / `paused` / `no_track` / `closed`), and sends a `craftify:title` plugin message to the server whenever the state changes (polling every 500 ms with native probes, near-zero CPU cost). Includes a mixin so players can see their own nametag in third-person (F5) and a **synchronized lyrics overlay** (LRCLib, no key) that advances with the song and freezes on pause (`/craftify lyrics on|off|toggle`).
 - **CraftifyPlugin 1.0.1** — receives the channel, keeps per-player Spotify state (including `paused`), and renders the track on the player nametag via scoreboard teams (`prefix + name + suffix`, single line, no lag). Optional hologram mode, `/nowplaying`, `/craftifyplugin reload` with permissions, auto-generated `config.yml` (with automatic migration from older configs), and an ANSI-colored startup banner.
 
 ## Pause detection

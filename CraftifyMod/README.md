@@ -71,6 +71,13 @@ thanks to the pause detection, **freeze on the current line while Spotify is pau
 
 - The current line is white, the previous/next lines are dimmed, with a small track header
   and a semi-transparent backdrop.
+- The lookup uses LRCLib's **search** endpoint with **fuzzy matching** (Levenshtein) and
+  title/artist cleaning (removes `- Remastered`, `(Remix)`, `feat. X`, `- Topic`, etc.),
+  so titles that don't match exactly still resolve — the same approach as the Forawn app.
+- The search is **order-independent**: it queries by field (`track_name` + `artist_name`)
+  in both alignments and the candidate match accepts `Song - Artist` or `Artist - Song`,
+  since the detected window title order varies by OS/version. Multi-artist strings
+  (`"A; B"`) are handled too.
 - Lyrics are fetched **asynchronously** when the song changes (never on the render thread)
   and **cached per song** (LRU, 24 songs), so the same song is not re-fetched; a 429 rate
   limit or a missing result is treated as "no lyrics".
@@ -91,6 +98,7 @@ In-game (singleplayer world or connected to a server):
 /craftify spotify
 /craftify send on|off|toggle
 /craftify lyrics on|off|toggle
+/craftify lyrics search [song artist]
 ```
 
 ### `/craftify spotify` — status and verification
@@ -109,8 +117,18 @@ Example output:
 [Craftify] Spotify process (Spotify.exe): running
 [Craftify] State: playing
 [Craftify] Current title: My Favorite Song - My Artist
+[Craftify] Lyrics: enabled (LRCLib)
+[Craftify] Lyrics track: My Favorite Song - My Artist
+[Craftify] Lyrics state: 42 synced line(s) loaded
+[Craftify] Lyrics overlay: rendering (1250 frames)
 [Craftify] Packet sending: active (real-time song change detection)
 ```
+
+The lyrics section helps diagnosing the overlay: `Lyrics state` shows `loading` / `N
+synced line(s) loaded` / `instrumental` / `no synced lyrics found` and `Lyrics overlay`
+shows whether the HUD element is actually being drawn (`rendering (N frames)` vs `not
+rendering`) — so you can tell apart a data problem (no track / no lyrics) from a HUD
+problem (element never called).
 
 If the process is not running or the title could not be read, the command says so in red
 and, depending on the platform, suggests what to do (accept the Automation prompt on
@@ -129,6 +147,13 @@ The pause state persists between worlds (only lost when closing the game). The
 
 - `/craftify lyrics on` / `off` / `toggle` enable, disable or switch the LRCLib lyrics
   overlay (enabled by default).
+- `/craftify lyrics search <song artist>` searches LRCLib and lists the candidates (up
+  to 8) with `[synced m:ss]` / `[plain only]` / `[instrumental]` tags, for debugging a
+  miss. Without arguments it searches the currently detected song.
+- `/craftify spotify` shows the lyrics diagnostics: `Lyrics state` (loading / loaded /
+  instrumental / not found), `Lyrics detail` (why: matched result, only plain lyrics,
+  HTTP 429 rate limit, network error, no match among N results) and `Lyrics overlay`
+  (whether the HUD element is actually drawing).
 
 ## See your own name in third person (F5)
 
