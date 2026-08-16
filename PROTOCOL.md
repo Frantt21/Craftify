@@ -308,6 +308,8 @@ The `timestamp` is the client's capture epoch millis. Use it to:
 
 ## 5. Limitations and notes
 
+- **Lyrics are client-side only:** the mod's lyrics overlay (LRCLib, synced, freezes on
+  pause) does not involve the protocol or the plugin — there is no lyrics channel.
 - **No handshake or ACK:** the channel is used as-is; the server acknowledges nothing.
 - **Latency:** a change takes ≤ ~0.5–0.6 s to be detected (500 ms poll interval + probe
   cost).

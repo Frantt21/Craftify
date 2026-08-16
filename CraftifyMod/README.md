@@ -61,6 +61,28 @@ The mod also detects when Spotify is **paused** (no active song), per OS:
   `playerctl`. Spotify's local API (port 4380) no longer exists on modern clients. Spotify
   must run in the same graphical session as the user.
 
+## Lyrics overlay (LRCLib)
+
+The mod can show **synchronized lyrics** of the current song on screen (bottom center,
+karaoke style), fetched from [**LRCLib**](https://lrclib.net) — a free, open lyrics
+database with a public API that needs **no key**. The lyrics advance with the song and,
+thanks to the pause detection, **freeze on the current line while Spotify is paused**
+(resuming continues from the same elapsed time).
+
+- The current line is white, the previous/next lines are dimmed, with a small track header
+  and a semi-transparent backdrop.
+- Lyrics are fetched **asynchronously** when the song changes (never on the render thread)
+  and **cached per song** (LRU, 24 songs), so the same song is not re-fetched; a 429 rate
+  limit or a missing result is treated as "no lyrics".
+- Instrumental tracks show `♪ Instrumental`; a missing result shows nothing.
+- The overlay respects the hidden HUD (F1) and works in singleplayer too (it is
+  client-side only, the plugin is not involved).
+- Toggle: `/craftify lyrics on|off|toggle` (enabled by default).
+
+**Note on sync:** the song start is taken as the moment the mod detects the new track
+(the window title changes at the song boundary, within one poll ~0.5 s), so the lyrics
+may be off by up to ~0.5–1 s. Replays of the same song reuse the cached lines.
+
 ## Commands
 
 In-game (singleplayer world or connected to a server):
@@ -68,6 +90,7 @@ In-game (singleplayer world or connected to a server):
 ```
 /craftify spotify
 /craftify send on|off|toggle
+/craftify lyrics on|off|toggle
 ```
 
 ### `/craftify spotify` — status and verification
@@ -101,6 +124,11 @@ macOS, install `playerctl`/`xdotool` on Linux, etc.).
 
 The pause state persists between worlds (only lost when closing the game). The
 `/craftify spotify` command reflects whether sending is paused.
+
+### `/craftify lyrics` — lyrics overlay
+
+- `/craftify lyrics on` / `off` / `toggle` enable, disable or switch the LRCLib lyrics
+  overlay (enabled by default).
 
 ## See your own name in third person (F5)
 
@@ -150,6 +178,7 @@ The cost of each query was measured (Windows 11, Java 26):
 | `osascript` (title, macOS) | ~200–500 ms |
 | **Current macOS poll** | **~1–10 ms** native process check + **~200–500 ms** AppleScript for the track (the window title is the account tier, not the song) |
 | Linux poll (`playerctl` or `pgrep` + `xdotool`) | ~10–80 ms (light OS processes) |
+| LRCLib lyrics fetch (on song change only, async, cached) | ~200–500 ms, once per song |
 
 The bottleneck was **PowerShell startup** (~1.1 s per invocation) on Windows and
 **AppleScript startup** (~200–500 ms) on macOS. That's why the mod uses **native JNA

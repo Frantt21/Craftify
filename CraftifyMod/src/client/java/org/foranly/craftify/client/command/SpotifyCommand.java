@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import org.foranly.craftify.client.lyrics.LyricsManager;
 import org.foranly.craftify.client.spotify.SpotifyProcess;
 import org.foranly.craftify.client.spotify.SpotifyTracker;
 
@@ -28,7 +29,14 @@ public final class SpotifyCommand {
                         .then(ClientCommands.literal("off")
                                 .executes(ctx -> setSending(ctx, true)))
                         .then(ClientCommands.literal("toggle")
-                                .executes(ctx -> setSending(ctx, !SpotifyTracker.isPaused())))));
+                                .executes(ctx -> setSending(ctx, !SpotifyTracker.isPaused()))))
+                .then(ClientCommands.literal("lyrics")
+                        .then(ClientCommands.literal("on")
+                                .executes(ctx -> setLyrics(ctx, true)))
+                        .then(ClientCommands.literal("off")
+                                .executes(ctx -> setLyrics(ctx, false)))
+                        .then(ClientCommands.literal("toggle")
+                                .executes(ctx -> setLyrics(ctx, !LyricsManager.instance().isEnabled())))));
     }
 
     private static int setSending(CommandContext<FabricClientCommandSource> context, boolean paused) {
@@ -45,6 +53,15 @@ public final class SpotifyCommand {
             source.sendFeedback(Component.literal("[Craftify] The current Spotify state will be sent on the next read.")
                     .withStyle(ChatFormatting.GRAY));
         }
+        return 1;
+    }
+
+    private static int setLyrics(CommandContext<FabricClientCommandSource> context, boolean enabled) {
+        LyricsManager.instance().setEnabled(enabled);
+        FabricClientCommandSource source = context.getSource();
+        source.sendFeedback(Component.literal("[Craftify] Lyrics overlay "
+                + (enabled ? "enabled (LRCLib)." : "disabled."))
+                .withStyle(enabled ? ChatFormatting.GREEN : ChatFormatting.YELLOW));
         return 1;
     }
 

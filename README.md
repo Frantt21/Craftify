@@ -5,7 +5,7 @@ Minecraft server:
 
 | Component | Folder | What it does |
 |------------|---------|----------|
-| **CraftifyMod** | [`CraftifyMod/`](CraftifyMod/) | Minecraft mod (Fabric, client-only): detects Spotify on the player's OS, reads the song title from the process window and sends it to the server. |
+| **CraftifyMod** | [`CraftifyMod/`](CraftifyMod/) | Minecraft mod (Fabric, client-only): detects Spotify on the player's OS, reads the song title and pause state, sends it to the server, and shows synchronized lyrics on screen (LRCLib). |
 | **CraftifyPlugin** | [`CraftifyPlugin/`](CraftifyPlugin/) | Paper server plugin: receives the title, stores it per player and displays it (nametag, commands). |
 
 The **communication contract** between both — the exact packet format and how the plugin
@@ -20,7 +20,7 @@ must receive it — is defined in [`PROTOCOL.md`](PROTOCOL.md).
 │  Detects Spotify on the OS   │   {"state":"playing",               │  Stores the state per        │
 │  Reads song + pause state    │    "track":"Song - Artist",         │  player (UUID)               │
 │  Sends ONLY on changes       │    "timestamp": ...}                │  Nametag + /nowplaying       │
-│  Shows own name in 3rd person│                                     │  (hologram optional)         │
+│  Lyrics overlay (LRCLib)     │                                     │  (hologram optional)         │
 └──────────────────────────────┘                                     └──────────────────────────────┘
 ```
 
@@ -40,6 +40,9 @@ must receive it — is defined in [`PROTOCOL.md`](PROTOCOL.md).
    available as an optional mode.
 4. **The mod** also lets you see your own name in **third person (F5)** — vanilla hides
    it — so the player sees their nametag with the song.
+5. **The mod** optionally shows **synchronized lyrics** (from LRCLib) on screen that
+   advance with the song and freeze on pause — client-side only, the plugin is not
+   involved.
 
 The mod does **not** interpret the music and the plugin does **not** touch the operating
 system: each component does one thing, and they communicate only through the protocol
@@ -48,8 +51,8 @@ defined in [`PROTOCOL.md`](PROTOCOL.md).
 ## Component documentation
 
 - **CraftifyMod** ([`CraftifyMod/README.md`](CraftifyMod/README.md)) — the mod: detection
-  per OS, requirements, commands (`/craftify spotify`, `/craftify send`), polling and
-  detection cost, build.
+  per OS, requirements, commands (`/craftify spotify`, `/craftify send`, `/craftify
+  lyrics`), lyrics overlay (LRCLib), polling and detection cost, build.
 - **CraftifyPlugin** ([`CraftifyPlugin/README.md`](CraftifyPlugin/README.md)) — the plugin:
   what it does today (channel reception, per-player state, nametag via scoreboard teams,
   `/nowplaying`, `/craftifyplugin reload`), configuration and build.
@@ -59,8 +62,8 @@ defined in [`PROTOCOL.md`](PROTOCOL.md).
 
 ## Current status
 
-- [x] The mod detects Spotify, sends `craftify:title` on every state change and shows the
-  player's own name in third person (F5).
+- [x] The mod detects Spotify (song + pause state), sends `craftify:title` on every state
+  change, shows the player's own name in third person (F5) and synced lyrics (LRCLib).
 - [x] The Paper plugin receives the channel, stores the state per player and shows it in
   the player's nametag (hologram optional).
 - [ ] Conversion logic in the plugin (chat, scoreboard, Discord, Twitch, etc.).

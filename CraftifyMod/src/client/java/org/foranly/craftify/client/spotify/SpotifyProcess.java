@@ -221,7 +221,7 @@ public final class SpotifyProcess {
         // not be extracted, the system one.
         String playerctl = playerctlBinary();
         String mpris = firstNonBlankLine(run(playerctl, "--player=spotify", "metadata", "--format",
-                "{{ status }}|{{ artist }} - {{ title }}"));
+                "{{ status }}|{{ title }} - {{ artist }}"));
         if (mpris != null) {
             return parsePlayerctl(mpris);
         }

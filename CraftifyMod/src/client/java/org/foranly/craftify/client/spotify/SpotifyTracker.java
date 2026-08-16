@@ -4,6 +4,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import org.foranly.craftify.client.lyrics.LyricsManager;
 import org.foranly.craftify.client.network.SpotifyTitlePayload;
 
 /**
@@ -115,6 +116,9 @@ public final class SpotifyTracker {
                         track = "";
                     }
                 }
+
+                // Feed the lyrics overlay (independent of packet sending).
+                LyricsManager.instance().onState(state, track);
 
                 // Send only when the state + title combination changes (and not paused).
                 String signature = state + '\u0000' + track;
