@@ -6,7 +6,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.messaging.PluginMessageListener;
-import org.foranly.craftifyplugin.hologram.LyricsHologramManager;
+import org.foranly.craftifyplugin.display.LyricsDisplay;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -14,20 +14,20 @@ import java.util.logging.Logger;
 
 /**
  * Receives the {@code craftify:lyricsline} channel (PROTOCOL.md §6): the current lyric
- * line the player shares with others (empty line = clear the hologram).
+ * line the player shares with others (empty line = clears the display).
  *
- * <p>The listener runs on the netty thread, so the hologram update (entity operations) is
- * scheduled on the main server thread.
+ * <p>The listener runs on the netty thread, so the display update (scoreboard / entity
+ * operations) is scheduled on the main server thread.
  */
 public final class LyricsListener implements PluginMessageListener {
 
     private final Plugin plugin;
-    private final LyricsHologramManager lyricsHolograms;
+    private final LyricsDisplay lyricsDisplay;
     private final Logger logger;
 
-    public LyricsListener(Plugin plugin, LyricsHologramManager lyricsHolograms, Logger logger) {
+    public LyricsListener(Plugin plugin, LyricsDisplay lyricsDisplay, Logger logger) {
         this.plugin = plugin;
-        this.lyricsHolograms = lyricsHolograms;
+        this.lyricsDisplay = lyricsDisplay;
         this.logger = logger;
     }
 
@@ -38,6 +38,7 @@ public final class LyricsListener implements PluginMessageListener {
         }
 
         String line;
+        int number;
         try {
             int[] offset = {0};
             int length = readVarInt(message, offset);
@@ -47,6 +48,9 @@ public final class LyricsListener implements PluginMessageListener {
             String json = new String(message, offset[0], length, StandardCharsets.UTF_8);
             JsonObject object = JsonParser.parseString(json).getAsJsonObject();
             line = object.has("line") ? object.get("line").getAsString() : "";
+            // 1-based line number (PROTOCOL.md §6); -1 when not provided or not a number.
+            number = object.has("number") && object.get("number").isJsonPrimitive()
+                    ? object.get("number").getAsInt() : -1;
         } catch (RuntimeException e) {
             logger.warning("Invalid craftify:lyricsline payload from " + player.getName() + ": " + e.getMessage());
             return;
@@ -58,7 +62,7 @@ public final class LyricsListener implements PluginMessageListener {
             if (online == null || !online.isOnline()) {
                 return;
             }
-            lyricsHolograms.update(online, line);
+            lyricsDisplay.update(online, line, number);
         });
     }
 

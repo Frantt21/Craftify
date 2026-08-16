@@ -31,7 +31,7 @@ the network, and how the plugin must receive and use them.
 | Channel | `craftify:title` (§2) and `craftify:lyricsline` (§6) |
 | Direction | Client → Server |
 | Payload | `[VarInt length][UTF-8 bytes of a JSON]` |
-| JSON | `{"state":"...","track":"...","timestamp":...}` / `{"line":"..."}` |
+| JSON | `{"state":"...","track":"...","timestamp":...}` / `{"line":"...","number":...}` |
 | States | `playing` · `paused` · `no_track` · `closed` |
 | Frequency | **Only when the state changes** (no heartbeat) |
 
@@ -359,17 +359,23 @@ An optional channel so the player can show the **current lyric line** to other p
 Same envelope as `craftify:title` (§2.1): `[VarInt length][UTF-8 JSON]`.
 
 ```json
-{"line":"First lyric line"}
+{"line":"First lyric line","number":1}
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `line` | string | The lyric line to display; empty clears the hologram. |
+| `line` | string | The lyric line to display; empty clears the display. |
+| `number` | int | 1-based index of the line inside the song's lyrics (`1`, `2`, `3`...); `-1` when the line is empty or not provided. Older versions omit it — default to `-1`. |
 
 ### 6.3 How the plugin should use it
 
 - Keep a `TextDisplay` per player (hologram) and update its text with `line`;
   remove the entity when `line` is empty or the player disconnects.
+- The default mode renders the line in the vanilla **`BELOW_NAME`** scoreboard slot: the
+  line is the objective's display name and the score is `number` (the line number the mod
+  sends, configurable in `config.yml` under `lyrics-display.number` — `line`, `random` or
+  a fixed value). The `TextDisplay` hologram remains available as a legacy mode
+  (`lyrics-display.mode: hologram`), which ignores `number`.
 - The channel is **opt-in per player**: receiving no packets means the player chose not
   to share (do not request it, do not show anything).
 - The lyrics data itself is client-side only: the mod fetches synced lyrics from LRCLib

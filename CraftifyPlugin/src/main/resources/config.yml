@@ -31,10 +31,24 @@ hologram:
   # Text size (TextDisplay entity scale).
   scale: 0.6
 
-# --- Lyrics hologram (optional) ----------------------------------------------------
+# --- Lyrics display ---------------------------------------------------------------
 # Shows the current lyric line the player chooses to share (the mod sends
 # craftify:lyricsline only while the player has "share lyrics" enabled in the mod's F10
 # menu; an empty line clears it and a pause keeps the last line frozen).
+lyrics-display:
+  # How the shared line is rendered:
+  #   below-name → vanilla scoreboard BELOW_NAME slot: the line is the objective's
+  #                display name and a number appears after it (vanilla requires one,
+  #                see `number` below). Part of the player's name tag, zero lag.
+  #   hologram   → legacy TextDisplay entity above the player (may lag while moving).
+  mode: below-name
+  # Numeric value required by the BELOW_NAME slot:
+  #   line    → the actual lyric line number the mod sends (1, 2, 3...) — recommended
+  #   random  → a random number per player
+  #   0 or 1  → a fixed number
+  number: line
+
+# --- Lyrics hologram (legacy mode, used when lyrics-display.mode: hologram) ---------
 lyrics-hologram:
   # Enables/disables the lyrics hologram.
   enabled: true

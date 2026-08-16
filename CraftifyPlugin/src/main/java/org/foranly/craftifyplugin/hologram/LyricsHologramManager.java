@@ -12,6 +12,7 @@ import org.bukkit.entity.TextDisplay.TextAlignment;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Transformation;
+import org.foranly.craftifyplugin.display.LyricsDisplay;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -20,15 +21,14 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Hologram with the current lyric line the player chooses to share (PROTOCOL.md §6).
- *
- * <p>The mod only sends {@code craftify:lyricsline} while the player has "share lyrics"
- * enabled, and only when the line changes: an empty line clears the hologram and a pause
- * sends nothing (so the last line stays frozen). Uses a {@link TextDisplay} that follows
- * the player, like the title hologram. Configurable in {@code config.yml} (section
- * {@code lyrics-hologram}).
+ * Hologram with the current lyric line the player chooses to share (PROTOCOL.md §6), the
+ * legacy {@code TextDisplay} mode. The mod only sends {@code craftify:lyricsline} while
+ * the player has "share lyrics" enabled, and only when the line changes: an empty line
+ * clears the hologram and a pause sends nothing (so the last line stays frozen).
+ * Configurable in {@code config.yml} (section {@code lyrics-hologram}). Implements
+ * {@link LyricsDisplay} so the listener does not care which mode is configured.
  */
-public final class LyricsHologramManager {
+public final class LyricsHologramManager implements LyricsDisplay {
 
     private final Plugin plugin;
     private final boolean enabled;
@@ -59,9 +59,10 @@ public final class LyricsHologramManager {
     }
 
     /**
-     * Updates the player's lyric hologram; an empty line removes it.
+     * Updates the player's lyric hologram; an empty line removes it. The line number is
+     * not used by the hologram (it has no score slot).
      */
-    public void update(Player player, String line) {
+    public void update(Player player, String line, int number) {
         if (!enabled) {
             return;
         }

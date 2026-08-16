@@ -3,8 +3,8 @@ package org.foranly.craftifyplugin;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.foranly.craftifyplugin.display.LyricsDisplay;
 import org.foranly.craftifyplugin.hologram.HologramManager;
-import org.foranly.craftifyplugin.hologram.LyricsHologramManager;
 import org.foranly.craftifyplugin.nametag.NametagManager;
 
 import java.util.UUID;
@@ -15,14 +15,14 @@ public final class PlayerListener implements Listener {
     private final SpotifyStateManager stateManager;
     private final HologramManager holograms;
     private final NametagManager nametags;
-    private final LyricsHologramManager lyricsHolograms;
+    private final LyricsDisplay lyricsDisplay;
 
     public PlayerListener(SpotifyStateManager stateManager, HologramManager holograms,
-                          NametagManager nametags, LyricsHologramManager lyricsHolograms) {
+                          NametagManager nametags, LyricsDisplay lyricsDisplay) {
         this.stateManager = stateManager;
         this.holograms = holograms;
         this.nametags = nametags;
-        this.lyricsHolograms = lyricsHolograms;
+        this.lyricsDisplay = lyricsDisplay;
     }
 
     @EventHandler
@@ -31,6 +31,6 @@ public final class PlayerListener implements Listener {
         stateManager.remove(uuid);
         nametags.remove(uuid);
         holograms.remove(uuid);
-        lyricsHolograms.remove(uuid);
+        lyricsDisplay.remove(uuid);
     }
 }

@@ -55,20 +55,38 @@ hologram:
   height: 2.15    # height above the player, in blocks
   scale: 0.6      # text size
 
-lyrics-hologram:
-  enabled: true   # shows the shared lyric line (opt-in per player, PROTOCOL.md §6)
-  height: 1.85    # height above the player, in blocks
-  scale: 0.6      # text size
+lyrics-display:
+  mode: below-name  # how the shared lyric line is shown (see below)
+  number: line      # number the BELOW_NAME slot requires: "line" (the actual lyric
+                    # line number the mod sends: 1, 2, 3...), "random", or a fixed 0/1
+
+lyrics-hologram:    # legacy mode, only used when lyrics-display.mode: hologram
+  enabled: true
+  height: 1.85      # height above the player, in blocks
+  scale: 0.6        # text size
 ```
 
 The name tag renders as `prefix + name + suffix` on a single line (vanilla does not
 render multi-line player name tags). With a `state` other than `playing` (or no title)
 the prefix/suffix are cleared and the nametag goes back to normal.
 
-The **lyrics hologram** shows the current lyric line of players who enabled **"Share
-lyrics with others"** in the mod (F10 menu): the mod sends `craftify:lyricsline` only on
-line changes (empty line clears it, a pause keeps the last line frozen), so the hologram
-is opt-in per player and never rendered for players who don't share.
+### Lyrics display (shared lines)
+
+The current lyric line of players who enabled **"Share lyrics with others"** in the mod
+(F10 menu) is shown via `craftify:lyricsline` — the mod sends it only on line changes
+(empty line clears it, a pause keeps the last line frozen), so it is opt-in per player
+and never rendered for players who don't share. Two modes, selected with
+`lyrics-display.mode`:
+
+- **`below-name` (default)** — the vanilla scoreboard `BELOW_NAME` slot: the line is the
+  objective's display name and vanilla requires a number after it, set with
+  `lyrics-display.number` (`0`, `1`, or `random`). It is part of the player's name tag
+  (no separate entity), so it follows the player with **zero lag**. Note: the `BELOW_NAME`
+  text is the same for every observer, so when several players share at once only the
+  latest line is shown (under each sharing player's name).
+- **`hologram`** — a `TextDisplay` entity that follows the player (the previous mode;
+  works, but being a separate entity that teleports every tick, a small delay can be
+  noticed when moving).
 
 ### Supported colors and formats (MiniMessage)
 
@@ -125,8 +143,10 @@ the server's `plugins` folder (Paper).
 | `command/CraftifyCommand` | `/craftifyplugin reload`: reloads config + re-applies states (`craftifyplugin.reload`) |
 | `nametag/NametagManager` | Shows the title in the player's floating name via scoreboard teams (prefix/suffix, no lag) |
 | `hologram/HologramManager` | Optional `TextDisplay` hologram (icon + title) |
-| `LyricsListener` | `PluginMessageListener`: decodes `craftify:lyricsline` (VarInt + UTF-8 + JSON) |
-| `hologram/LyricsHologramManager` | `TextDisplay` hologram with the shared lyric line |
+| `LyricsListener` | `PluginMessageListener`: decodes `craftify:lyricsline` (VarInt + UTF-8 + JSON, line + number) |
+| `display/LyricsDisplay` | Interface: how the shared lyric line is shown (below-name or hologram) |
+| `display/LyricsBelowNameManager` | `BELOW_NAME` scoreboard objective with the shared line + number (`line`/`random`/fixed) |
+| `hologram/LyricsHologramManager` | `TextDisplay` hologram with the shared lyric line (legacy mode) |
 
 ## Quick test
 

@@ -32,10 +32,32 @@ public final class SpotifyTracker {
     private static final long FAST_POLL_MS = 500;
     /** Interval while Spotify is closed (backoff). */
     private static final long SLOW_POLL_MS = 5000;
+    /** Interval of the transition confirmation burst (only while confirming). */
+    private static final long BURST_POLL_MS = 100;
+    /** How many burst polls are run to pin down a transition moment. */
+    private static final int BURST_TICKS = 4;
 
     private static ScheduledExecutorService executor;
     private static volatile String lastSignature;
     private static volatile boolean paused;
+
+    // --- Transition tracking (single tracker thread, no extra synchronization) ---
+    /** Status applied to the lyrics manager (for pause/resume/change detection). */
+    private static volatile String lastStatus = "";
+    /** Title applied to the lyrics manager. */
+    private static volatile String lastTitle = "";
+    /** Wall-clock of the last poll that observed Spotify actually playing. */
+    private static volatile long lastPlayingAt;
+    /** Wall-clock of the last poll that observed the paused state (resume anchor). */
+    private static volatile long lastPausedAt;
+    /** Status of the transition being confirmed, or {@code null}. */
+    private static volatile String pendingStatus;
+    /** Title of the transition being confirmed. */
+    private static volatile String pendingTitle;
+    /** When the pending status was first observed during the burst. */
+    private static volatile long pendingAt;
+    /** Burst polls left before applying the pending transition. */
+    private static volatile int burstLeft;
 
     private SpotifyTracker() {
     }
@@ -95,36 +117,38 @@ public final class SpotifyTracker {
                 SpotifyProcess.Snapshot snapshot = SpotifyProcess.readSnapshot(os);
                 spotifyRunning = snapshot.running();
 
-                String state;
-                String track;
-                switch (snapshot.status()) {
-                    case CLOSED -> {
-                        state = SpotifyTitlePayload.STATE_CLOSED;
-                        track = "";
-                    }
-                    case PLAYING -> {
-                        state = SpotifyTitlePayload.STATE_PLAYING;
-                        track = snapshot.title();
-                    }
-                    case PAUSED -> {
-                        state = SpotifyTitlePayload.STATE_PAUSED;
-                        track = "";
-                    }
-                    default -> {
-                        // UNKNOWN: running but the state could not be determined.
-                        state = SpotifyTitlePayload.STATE_NO_TRACK;
-                        track = "";
-                    }
+                String state = toState(snapshot);
+                String track = state.equals(SpotifyTitlePayload.STATE_PLAYING) ? snapshot.title() : "";
+
+                if (state.equals(SpotifyTitlePayload.STATE_PLAYING)) {
+                    // The song is actually playing: this is the anchor for the next pause.
+                    lastPlayingAt = System.currentTimeMillis();
+                } else if (state.equals(SpotifyTitlePayload.STATE_PAUSED)) {
+                    // Last observed paused moment: the anchor for the next resume.
+                    lastPausedAt = System.currentTimeMillis();
                 }
 
-                // Feed the lyrics overlay (independent of packet sending).
-                LyricsManager.instance().onState(state, track);
-
-                // Send only when the state + title combination changes (and not paused).
-                String signature = state + '\u0000' + track;
-                if (!paused && !signature.equals(lastSignature)) {
-                    lastSignature = signature;
-                    send(state, track);
+                if (burstLeft > 0) {
+                    // Confirmation burst: keep sampling at BURST_POLL_MS until it settles
+                    // (a very short pause/resume inside the burst updates the pending state).
+                    burstLeft--;
+                    if (burstLeft > 0) {
+                        scheduleNext(true);
+                        return;
+                    }
+                    applyTransition();
+                } else if (state.equals(lastStatus) && track.equals(lastTitle)) {
+                    // Steady state: keep the lyrics manager in sync (no transition to apply).
+                    LyricsManager.instance().onState(state, track, lastPlayingAt);
+                } else {
+                    // A change was detected: enter the confirmation burst so the transition
+                    // is applied only after a few quick polls confirm it.
+                    pendingStatus = state;
+                    pendingTitle = track;
+                    pendingAt = System.currentTimeMillis();
+                    burstLeft = BURST_TICKS;
+                    scheduleNext(true);
+                    return;
                 }
             }
         } catch (Exception e) {
@@ -133,12 +157,73 @@ public final class SpotifyTracker {
         scheduleNext(spotifyRunning);
     }
 
+    /** Maps a snapshot status to the payload state constant. */
+    private static String toState(SpotifyProcess.Snapshot snapshot) {
+        return switch (snapshot.status()) {
+            case CLOSED -> SpotifyTitlePayload.STATE_CLOSED;
+            case PLAYING -> SpotifyTitlePayload.STATE_PLAYING;
+            case PAUSED -> SpotifyTitlePayload.STATE_PAUSED;
+            default -> SpotifyTitlePayload.STATE_NO_TRACK;
+        };
+    }
+
+    /**
+     * Applies the confirmed transition: feeds the lyrics manager with the refined moment
+     * and sends the packet when the signature changed.
+     *
+     * <p>Both anchors are midpoints of the window where the transition happened, which
+     * halves the poll-quantization error:
+     * <ul>
+     *   <li>pause → midpoint between the last playing observation and the first paused one;</li>
+     *   <li>resume → midpoint between the last paused observation and the first playing one;</li>
+     *   <li>new track → the first playing observation (song boundary).</li>
+     * </ul>
+     */
+    private static void applyTransition() {
+        String state = pendingStatus;
+        String track = pendingTitle;
+        if (state == null) {
+            return;
+        }
+        long transitionAt = pendingAt;
+        if (state.equals(SpotifyTitlePayload.STATE_PAUSED)) {
+            transitionAt = (lastPlayingAt + transitionAt) / 2;
+        } else if (state.equals(SpotifyTitlePayload.STATE_PLAYING) && lastStatus.equals(SpotifyTitlePayload.STATE_PAUSED)) {
+            // Resume: the transition happened between the last paused and the first playing
+            // observation — take the midpoint so the resume anchor is as accurate as possible.
+            transitionAt = (lastPausedAt + transitionAt) / 2;
+        }
+        pendingStatus = null;
+        pendingTitle = null;
+        pendingAt = 0;
+        burstLeft = 0;
+
+        lastStatus = state;
+        lastTitle = track;
+        if (!state.equals(SpotifyTitlePayload.STATE_PLAYING)) {
+            lastPlayingAt = 0;
+        }
+
+        LyricsManager.instance().onState(state, track, transitionAt);
+
+        // Send only when the state + title combination changes (and not paused).
+        String signature = state + '\u0000' + track;
+        if (!paused && !signature.equals(lastSignature)) {
+            lastSignature = signature;
+            send(state, track);
+        }
+    }
+
     private static void scheduleNext(boolean spotifyRunning) {
         synchronized (SpotifyTracker.class) {
             if (executor == null || executor.isShutdown()) {
                 return;
             }
-            executor.schedule(SpotifyTracker::tick, spotifyRunning ? FAST_POLL_MS : SLOW_POLL_MS, TimeUnit.MILLISECONDS);
+            long delay = spotifyRunning ? FAST_POLL_MS : SLOW_POLL_MS;
+            if (burstLeft > 0) {
+                delay = BURST_POLL_MS;
+            }
+            executor.schedule(SpotifyTracker::tick, delay, TimeUnit.MILLISECONDS);
         }
     }
 

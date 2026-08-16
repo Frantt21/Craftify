@@ -63,27 +63,63 @@ The mod also detects when Spotify is **paused** (no active song), per OS:
 
 ## Lyrics overlay (LRCLib)
 
-The mod can show **synchronized lyrics** of the current song on screen (bottom-left,
-karaoke style), fetched from [**LRCLib**](https://lrclib.net) — a free, open lyrics
-database with a public API that needs **no key**. The lyrics advance with the song and,
-thanks to the pause detection, **freeze on the current line while Spotify is paused**
-(resuming continues from the same elapsed time).
+The mod can show **synchronized lyrics** of the current song on screen (karaoke style),
+fetched from [**LRCLib**](https://lrclib.net) — a free, open lyrics database with a
+public API that needs **no key**. The lyrics advance with the song and, thanks to the
+pause detection, **freeze on the current line while Spotify is paused** (resuming
+continues from the same elapsed time — the paused duration is excluded from the song
+clock, so the lyrics never skip ahead). The overlay can be anchored to any of **9 screen
+positions** (top/middle/bottom x left/center/right), flush against the edges (no margin)
+— see the F10 menu below or `/craftify lyrics position`. Lines longer than **280 px**
+are **wrapped** (word-aware) and the block is capped at **4 rows**, so it never grows
+into the HUD elements.
+
+**Pause/resume sync:** the line is frozen at the moment the pause actually happened, not
+when the poll detected it. When a state change (pause, resume or new song) is detected,
+the tracker runs a short **confirmation burst** (a few polls at ~100 ms) and anchors the
+transition to the **midpoint** of the window where it occurred (last playing ↔ first
+paused, and last paused ↔ first playing). That halves the poll-quantization error and
+removes the systematic lag of using the detection times, so after resuming the line
+continues from where the song really stopped (within ~0.1–0.25 s instead of up to 1 s).
+When the **song changes**, the whole estimate is reset — no leftover pause offset leaks
+into the new song's clock.
 
 ### Sharing lyrics with other players
 
 The player can choose to **share the current line** with the rest of the server: the mod
 sends it over `craftify:lyricsline` (PROTOCOL.md §6) and the server renders it as a
-**hologram** above the player. Sharing is **opt-in and off by default**: press **F10**
-(or `/craftify lyrics share on`) to enable it. While sharing, the line updates on every
-line change, pauses freeze the hologram, and toggling it off clears it.
+**hologram** above the player. Sharing is **opt-in and off by default**: enable it from
+the F10 menu (Lyrics options -> Share lyrics) or with `/craftify lyrics share on`. While
+sharing, the line updates on every line change, pauses freeze the hologram, and toggling
+it off clears it.
 
-### F10 options menu
+### F10 menu (general)
 
-Pressing **F10** (rebindable in the Controls screen, "Open Lyrics Options") opens a small
-in-game menu with two toggles: **Lyrics overlay** (the local on-screen lyrics) and
-**Share lyrics with others** (the server hologram). The same options are available via
-commands (`/craftify lyrics on|off`, `/craftify lyrics share on|off`, or bare
-`/craftify lyrics` to open the menu).
+Pressing **F10** (rebindable in the Controls screen, "Open Craftify Menu") opens the
+**general Craftify menu**, a real in-game screen with vanilla GUI icons:
+
+- **General options**: `Check Spotify` (prints the full status to the chat, same as
+  `/craftify spotify`) and `Packet sending: ON/OFF` (pauses/resumes the packets, same as
+  `/craftify send`).
+- **Submenus**: `Lyrics options` (overlay toggle, sharing and position) and `Lyrics
+  search` (the LRCLib search box with clickable candidates).
+- `Done` closes the menu.
+
+The **Lyrics options** submenu has the two toggles (overlay / share), an **Appearance**
+submenu and a **3x3 position picker** (TL TC TR / ML MC MR / BL BC BR) that anchors the
+overlay flush to that edge or corner. The **Appearance** submenu lets you adjust:
+
+- **Size** — text scale of the overlay from 50% to 300% (a slider, applied live).
+- **Opacity** — from 10% to 100% (also a slider; dims the text, the header and the
+  backdrop).
+- **Color** — a palette of presets (white, yellow, gold, green, aqua, pink, red, gray)
+  plus a custom hex box (`#RRGGBB`) to type any color.
+
+All three are applied immediately and persisted in `config/craftify.json`. The **Lyrics
+search** submenu searches LRCLib and lists up to 8 candidates; clicking one prints its
+details to the chat for debugging. The same options are available via commands
+(`/craftify lyrics on|off`, `/craftify lyrics share on|off`, `/craftify lyrics position
+<pos>`, `/craftify menu`, or bare `/craftify lyrics` to open the lyrics submenu directly).
 
 - The current line is white, the previous/next lines are dimmed, with a small track header
   and a semi-transparent backdrop.
@@ -113,9 +149,13 @@ In-game (singleplayer world or connected to a server):
 ```
 /craftify spotify
 /craftify send on|off|toggle
-/craftify lyrics            (opens the F10 options menu)
+/craftify menu              (opens the general F10 menu)
+/craftify lyrics            (opens the lyrics options submenu)
 /craftify lyrics on|off|toggle
 /craftify lyrics share on|off|toggle
+/craftify lyrics position <pos>   (topleft, topcenter, topright, middleleft,
+                                  middlecenter, middleright, bottomleft,
+                                  bottomcenter, bottomright)
 /craftify lyrics search [song artist]
 ```
 

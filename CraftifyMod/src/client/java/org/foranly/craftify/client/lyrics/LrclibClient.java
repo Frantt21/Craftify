@@ -108,7 +108,9 @@ public final class LrclibClient {
     /** Searches LRCLib asynchronously (for {@code /craftify lyrics search}). */
     public static CompletableFuture<SearchOutcome> searchAsync(String query) {
         return CompletableFuture.supplyAsync(() -> {
-            SearchResponse response = searchRaw(query);
+            // Must go through searchRawQ (URL-encoded): the raw query passed straight to
+            // URI.create would throw IllegalArgumentException on spaces/special chars.
+            SearchResponse response = searchRawQ(query);
             if (response.status() != 200) {
                 return new SearchOutcome(List.of(), response.error());
             }

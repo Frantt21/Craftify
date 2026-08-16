@@ -4,8 +4,18 @@ Minecraft mod + server plugin that shows the song the player is listening to on 
 
 ## What's included
 
-- **CraftifyMod 1.0.1** — detects Spotify natively on Windows (JNA), macOS (AppleScript), and Linux (MPRIS/playerctl, with xdotool fallback), reading both the **song title** and the **pause state** (`playing` / `paused` / `no_track` / `closed`), and sends a `craftify:title` plugin message to the server whenever the state changes (polling every 500 ms with native probes, near-zero CPU cost). Includes a mixin so players can see their own nametag in third-person (F5) and a **synchronized lyrics overlay** (LRCLib, no key) that advances with the song and freezes on pause (`/craftify lyrics on|off|toggle`).
-- **CraftifyPlugin 1.0.1** — receives the channel, keeps per-player Spotify state (including `paused`), and renders the track on the player nametag via scoreboard teams (`prefix + name + suffix`, single line, no lag). Optional hologram mode, `/nowplaying`, `/craftifyplugin reload` with permissions, auto-generated `config.yml` (with automatic migration from older configs), and an ANSI-colored startup banner.
+- **CraftifyMod 1.0.1** — detects Spotify natively on Windows (JNA), macOS (AppleScript), and Linux (MPRIS/playerctl, with xdotool fallback), reading both the **song title** and the **pause state** (`playing` / `paused` / `no_track` / `closed`), and sends a `craftify:title` plugin message to the server whenever the state changes (polling every 500 ms with native probes, near-zero CPU cost). Includes a mixin so players can see their own nametag in third-person (F5), a **synchronized lyrics overlay** (LRCLib, no key) that advances with the song and freezes on pause, and a **general F10 menu** (real MC screen with vanilla icons): Spotify status check, packet sending toggle, lyrics options submenu (overlay, share, 3x3 position picker — 9 anchors flush to the screen edges) and a lyrics search submenu (LRCLib search box with clickable candidates). Settings are persisted in `config/craftify.json`.
+
+## Lyrics sync improvements (pause/resume)
+
+- **Refined transition detection:** when a pause, resume or song change is detected, the tracker runs a short **confirmation burst** (~100 ms polls) and anchors the transition to the **midpoint** of the window where it happened (last playing ↔ first paused, and last paused ↔ first playing), instead of the detection poll. This removes the systematic lag of the old estimate (up to ~1 s) — after resuming, the line continues within ~0.1–0.25 s of where the song really stopped.
+- **Clean estimate on song change:** a new track resets the whole song clock and clears any leftover pause estimate, so a previous pause can never offset the new song's lyrics.
+- **CraftifyPlugin 1.0.1** — receives the channel, keeps per-player Spotify state (including `paused`), and renders the track on the player nametag via scoreboard teams (`prefix + name + suffix`, single line, no lag). The shared lyric line is shown by default in the vanilla **`BELOW_NAME` scoreboard slot** (zero lag). The number next to the line is now the **actual lyric line number** the mod sends (`lyrics-display.number: line` — 1, 2, 3...), with `random` or a fixed `0`/`1` still available, and the `TextDisplay` hologram as a legacy mode (`lyrics-display.mode: hologram`). Old configs with the fixed `0` are migrated to `line` automatically. `/nowplaying`, `/craftifyplugin reload` with permissions, auto-generated `config.yml`, and an ANSI-colored startup banner.
+
+## Lyrics overlay appearance (client)
+
+- **Size, opacity and color** for the lyrics overlay, from the F10 menu (Lyrics options -> Appearance): a **Size slider** (50%-300% text scale), an **Opacity slider** (10%-100%) and a **text color** picker (preset palette + custom `#RRGGBB` hex). All applied live and persisted in `config/craftify.json`.
+- The **shared lyric line now carries the line number** (`craftify:lyricsline` payload gains `"number"`), so the server's `BELOW_NAME` slot can show the actual line (1, 2, 3...) instead of a fixed number — see PROTOCOL.md §6.
 
 ## Pause detection
 

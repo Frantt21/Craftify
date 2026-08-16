@@ -20,8 +20,8 @@ must receive it — is defined in [`PROTOCOL.md`](PROTOCOL.md).
 │  Detects Spotify on the OS   │   {"state":"playing",               │  Stores the state per        │
 │  Reads song + pause state    │    "track":"Song - Artist",         │  player (UUID)               │
 │  Sends ONLY on changes       │    "timestamp": ...}                │  Nametag + /nowplaying       │
-│  Lyrics overlay (LRCLib)     │   {"line":"..."} (opt-in share)    │  Lyrics hologram (opt-in)    │
-│  F10 options menu            │                                     │  (title hologram optional)   │
+│  Lyrics overlay (LRCLib)     │   {"line":"..."} (opt-in share)    │  Lyrics below-name (opt-in)  │
+│  F10 menu (9 positions)      │                                     │  (title hologram optional)   │
 └──────────────────────────────┘                                     └──────────────────────────────┘
 ```
 
@@ -55,7 +55,8 @@ defined in [`PROTOCOL.md`](PROTOCOL.md).
 
 - **CraftifyMod** ([`CraftifyMod/README.md`](CraftifyMod/README.md)) — the mod: detection
   per OS, requirements, commands (`/craftify spotify`, `/craftify send`, `/craftify
-  lyrics`), lyrics overlay + sharing (LRCLib, F10 menu), polling and detection cost, build.
+  lyrics`), lyrics overlay + sharing (LRCLib, F10 menu with position picker and search),
+  polling and detection cost, build.
 - **CraftifyPlugin** ([`CraftifyPlugin/README.md`](CraftifyPlugin/README.md)) — the plugin:
   what it does today (channel reception, per-player state, nametag via scoreboard teams,
   `/nowplaying`, `/craftifyplugin reload`), configuration and build.
@@ -66,8 +67,9 @@ defined in [`PROTOCOL.md`](PROTOCOL.md).
 ## Current status
 
 - [x] The mod detects Spotify (song + pause state), sends `craftify:title` on every state
-  change, shows the player's own name in third person (F5), synced lyrics (LRCLib) and an
-  F10 options menu (overlay + share toggles).
+  change, shows the player's own name in third person (F5), synced lyrics (LRCLib) and a
+  general F10 menu (Spotify status, packet sending, lyrics options with 9 positions,
+  lyrics search).
 - [x] The Paper plugin receives the channels, stores the state per player and shows it in
   the player's nametag (hologram optional) plus the shared lyric line as a hologram.
 - [ ] Conversion logic in the plugin (chat, scoreboard, Discord, Twitch, etc.).

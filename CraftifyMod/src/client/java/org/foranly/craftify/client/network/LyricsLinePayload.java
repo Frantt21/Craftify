@@ -18,8 +18,12 @@ import net.minecraft.resources.Identifier;
  * hologram; a pause simply stops sending, so the server keeps the last line.
  *
  * <pre>{@code
- * {"line":"First lyric line"}
+ * {"line":"First lyric line","number":1}
  * }</pre>
+ *
+ * <p>{@code number} is the 1-based index of the current line inside the song's lyrics
+ * (the server can show it in the BELOW_NAME slot instead of a fixed number); it is
+ * {@code -1} when the line is empty. Older plugin versions ignore unknown fields.
  */
 public record LyricsLinePayload(String json) implements CustomPacketPayload {
 
@@ -34,10 +38,14 @@ public record LyricsLinePayload(String json) implements CustomPacketPayload {
         PayloadTypeRegistry.serverboundPlay().register(TYPE, CODEC);
     }
 
-    /** Builds a payload from a lyric line (empty = clear the hologram). */
-    public static LyricsLinePayload of(String line) {
+    /**
+     * Builds a payload from a lyric line and its 1-based line number
+     * (empty line + {@code -1} clears the display).
+     */
+    public static LyricsLinePayload of(String line, int number) {
         JsonObject object = new JsonObject();
         object.addProperty("line", line == null ? "" : line);
+        object.addProperty("number", number);
         return new LyricsLinePayload(new Gson().toJson(object));
     }
 
