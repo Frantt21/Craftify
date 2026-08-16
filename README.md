@@ -20,7 +20,8 @@ must receive it — is defined in [`PROTOCOL.md`](PROTOCOL.md).
 │  Detects Spotify on the OS   │   {"state":"playing",               │  Stores the state per        │
 │  Reads song + pause state    │    "track":"Song - Artist",         │  player (UUID)               │
 │  Sends ONLY on changes       │    "timestamp": ...}                │  Nametag + /nowplaying       │
-│  Lyrics overlay (LRCLib)     │                                     │  (hologram optional)         │
+│  Lyrics overlay (LRCLib)     │   {"line":"..."} (opt-in share)    │  Lyrics hologram (opt-in)    │
+│  F10 options menu            │                                     │  (title hologram optional)   │
 └──────────────────────────────┘                                     └──────────────────────────────┘
 ```
 
@@ -41,8 +42,10 @@ must receive it — is defined in [`PROTOCOL.md`](PROTOCOL.md).
 4. **The mod** also lets you see your own name in **third person (F5)** — vanilla hides
    it — so the player sees their nametag with the song.
 5. **The mod** optionally shows **synchronized lyrics** (from LRCLib) on screen that
-   advance with the song and freeze on pause — client-side only, the plugin is not
-   involved.
+   advance with the song and freeze on pause — client-side only.
+6. The player can **share the current line** with the server (F10 menu, opt-in): the mod
+   sends it on `craftify:lyricsline` and the plugin renders it as a **hologram** above the
+   player, so others can follow along.
 
 The mod does **not** interpret the music and the plugin does **not** touch the operating
 system: each component does one thing, and they communicate only through the protocol
@@ -52,7 +55,7 @@ defined in [`PROTOCOL.md`](PROTOCOL.md).
 
 - **CraftifyMod** ([`CraftifyMod/README.md`](CraftifyMod/README.md)) — the mod: detection
   per OS, requirements, commands (`/craftify spotify`, `/craftify send`, `/craftify
-  lyrics`), lyrics overlay (LRCLib), polling and detection cost, build.
+  lyrics`), lyrics overlay + sharing (LRCLib, F10 menu), polling and detection cost, build.
 - **CraftifyPlugin** ([`CraftifyPlugin/README.md`](CraftifyPlugin/README.md)) — the plugin:
   what it does today (channel reception, per-player state, nametag via scoreboard teams,
   `/nowplaying`, `/craftifyplugin reload`), configuration and build.
@@ -63,9 +66,10 @@ defined in [`PROTOCOL.md`](PROTOCOL.md).
 ## Current status
 
 - [x] The mod detects Spotify (song + pause state), sends `craftify:title` on every state
-  change, shows the player's own name in third person (F5) and synced lyrics (LRCLib).
-- [x] The Paper plugin receives the channel, stores the state per player and shows it in
-  the player's nametag (hologram optional).
+  change, shows the player's own name in third person (F5), synced lyrics (LRCLib) and an
+  F10 options menu (overlay + share toggles).
+- [x] The Paper plugin receives the channels, stores the state per player and shows it in
+  the player's nametag (hologram optional) plus the shared lyric line as a hologram.
 - [ ] Conversion logic in the plugin (chat, scoreboard, Discord, Twitch, etc.).
 
 ## Quick build

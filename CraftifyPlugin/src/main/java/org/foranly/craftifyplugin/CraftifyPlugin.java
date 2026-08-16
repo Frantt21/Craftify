@@ -5,6 +5,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.foranly.craftifyplugin.command.CraftifyCommand;
 import org.foranly.craftifyplugin.command.NowPlayingCommand;
 import org.foranly.craftifyplugin.hologram.HologramManager;
+import org.foranly.craftifyplugin.hologram.LyricsHologramManager;
 import org.foranly.craftifyplugin.nametag.NametagManager;
 
 /**
@@ -17,6 +18,8 @@ public final class CraftifyPlugin extends JavaPlugin {
 
     /** Protocol channel (PROTOCOL.md §2). */
     public static final String CHANNEL = "craftify:title";
+    /** Shared-lyrics channel (PROTOCOL.md §6). */
+    public static final String LYRICS_CHANNEL = "craftify:lyricsline";
 
     private static final String SEPARATOR = "==================================================";
 
@@ -33,6 +36,7 @@ public final class CraftifyPlugin extends JavaPlugin {
     private SpotifyStateManager stateManager;
     private HologramManager holograms;
     private NametagManager nametags;
+    private LyricsHologramManager lyricsHolograms;
 
     @Override
     public void onEnable() {
@@ -47,13 +51,18 @@ public final class CraftifyPlugin extends JavaPlugin {
         nametags = new NametagManager(this);
         holograms = new HologramManager(this);
         holograms.start();
+        lyricsHolograms = new LyricsHologramManager(this);
+        lyricsHolograms.start();
 
         // Receive C→S: the payload arrives as minecraft:custom_payload (PROTOCOL.md §3.2).
         getServer().getMessenger().registerIncomingPluginChannel(this, CHANNEL,
                 new SpotifyListener(this, stateManager, holograms, nametags, getLogger()));
+        getServer().getMessenger().registerIncomingPluginChannel(this, LYRICS_CHANNEL,
+                new LyricsListener(this, lyricsHolograms, getLogger()));
 
         // Clear the state and the display on disconnect (PROTOCOL.md §4.1).
-        getServer().getPluginManager().registerEvents(new PlayerListener(stateManager, holograms, nametags), this);
+        getServer().getPluginManager().registerEvents(
+                new PlayerListener(stateManager, holograms, nametags, lyricsHolograms), this);
 
         // Verification: /nowplaying
         getCommand("nowplaying").setExecutor(new NowPlayingCommand(stateManager));
@@ -73,6 +82,9 @@ public final class CraftifyPlugin extends JavaPlugin {
         }
         if (holograms != null) {
             holograms.shutdown();
+        }
+        if (lyricsHolograms != null) {
+            lyricsHolograms.shutdown();
         }
         stateManager = null;
     }
@@ -99,6 +111,13 @@ public final class CraftifyPlugin extends JavaPlugin {
         nametags = new NametagManager(this);
         holograms = new HologramManager(this);
         holograms.start();
+        lyricsHolograms = new LyricsHologramManager(this);
+        lyricsHolograms.start();
+
+        // Re-register the lyrics channel (the listener holds a reference to the manager).
+        getServer().getMessenger().unregisterIncomingPluginChannel(this, LYRICS_CHANNEL);
+        getServer().getMessenger().registerIncomingPluginChannel(this, LYRICS_CHANNEL,
+                new LyricsListener(this, lyricsHolograms, getLogger()));
 
         // Re-apply the stored state of every online player.
         getServer().getOnlinePlayers().forEach(player ->
@@ -148,6 +167,8 @@ public final class CraftifyPlugin extends JavaPlugin {
         }
         banner(ANSI_GRAY + "Nametag: " + ANSI_RESET + status(nametags != null && nametags.isEnabled()));
         banner(ANSI_GRAY + "Hologram: " + ANSI_RESET + status(holograms != null && holograms.isEnabled()));
+        banner(ANSI_GRAY + "Lyrics hologram: " + ANSI_RESET
+                + status(lyricsHolograms != null && lyricsHolograms.isEnabled()));
         banner(ANSI_GRAY + "Commands: " + ANSI_RESET + "/nowplaying, /craftifyplugin reload");
         banner(ANSI_PURPLE + SEPARATOR + ANSI_RESET);
         banner(ANSI_GREEN + "CraftifyPlugin enabled in " + ms + " ms" + ANSI_RESET);

@@ -63,11 +63,27 @@ The mod also detects when Spotify is **paused** (no active song), per OS:
 
 ## Lyrics overlay (LRCLib)
 
-The mod can show **synchronized lyrics** of the current song on screen (bottom center,
+The mod can show **synchronized lyrics** of the current song on screen (bottom-left,
 karaoke style), fetched from [**LRCLib**](https://lrclib.net) — a free, open lyrics
 database with a public API that needs **no key**. The lyrics advance with the song and,
 thanks to the pause detection, **freeze on the current line while Spotify is paused**
 (resuming continues from the same elapsed time).
+
+### Sharing lyrics with other players
+
+The player can choose to **share the current line** with the rest of the server: the mod
+sends it over `craftify:lyricsline` (PROTOCOL.md §6) and the server renders it as a
+**hologram** above the player. Sharing is **opt-in and off by default**: press **F10**
+(or `/craftify lyrics share on`) to enable it. While sharing, the line updates on every
+line change, pauses freeze the hologram, and toggling it off clears it.
+
+### F10 options menu
+
+Pressing **F10** (rebindable in the Controls screen, "Open Lyrics Options") opens a small
+in-game menu with two toggles: **Lyrics overlay** (the local on-screen lyrics) and
+**Share lyrics with others** (the server hologram). The same options are available via
+commands (`/craftify lyrics on|off`, `/craftify lyrics share on|off`, or bare
+`/craftify lyrics` to open the menu).
 
 - The current line is white, the previous/next lines are dimmed, with a small track header
   and a semi-transparent backdrop.
@@ -97,7 +113,9 @@ In-game (singleplayer world or connected to a server):
 ```
 /craftify spotify
 /craftify send on|off|toggle
+/craftify lyrics            (opens the F10 options menu)
 /craftify lyrics on|off|toggle
+/craftify lyrics share on|off|toggle
 /craftify lyrics search [song artist]
 ```
 
@@ -145,8 +163,11 @@ The pause state persists between worlds (only lost when closing the game). The
 
 ### `/craftify lyrics` — lyrics overlay
 
+- `/craftify lyrics` (no arguments) opens the options menu (same as F10).
 - `/craftify lyrics on` / `off` / `toggle` enable, disable or switch the LRCLib lyrics
   overlay (enabled by default).
+- `/craftify lyrics share on` / `off` / `toggle` share the current lyric line with other
+  players (server hologram; off by default).
 - `/craftify lyrics search <song artist>` searches LRCLib and lists the candidates (up
   to 8) with `[synced m:ss]` / `[plain only]` / `[instrumental]` tags, for debugging a
   miss. Without arguments it searches the currently detected song.

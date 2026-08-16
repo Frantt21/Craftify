@@ -5,11 +5,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.resources.Identifier;
+import org.foranly.craftify.client.network.LyricsLinePayload;
 import org.foranly.craftify.client.network.SpotifyTitlePayload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +43,8 @@ public final class LyricsManager {
     private static final int COLOR_HEADER = 0xFF999999;
     private static final int COLOR_INSTRUMENTAL = 0xFFAAAAAA;
     private static final int COLOR_BACKDROP = 0x99000000;
+    /** Left margin of the overlay block. */
+    private static final int LEFT_MARGIN = 6;
 
     private static final LyricsManager INSTANCE = new LyricsManager();
 
@@ -62,6 +66,10 @@ public final class LyricsManager {
     private final Map<String, CacheEntry> cache = new LinkedHashMap<>(16, 0.75f, true);
 
     private volatile boolean enabled = true;
+    /** Whether the current line is shared with other players (server hologram). */
+    private volatile boolean shared;
+    /** Last line sent to the server ({@code null} = nothing sent yet). */
+    private volatile String lastSharedLine;
     private volatile String currentTrack;
     private volatile List<LyricLine> lines;
     private volatile boolean instrumental;
@@ -100,6 +108,45 @@ public final class LyricsManager {
             case SpotifyTitlePayload.STATE_PAUSED -> onPaused();
             default -> onHidden(); // no_track / closed
         }
+        maybeSendSharedLine();
+    }
+
+    /**
+     * Sends the current line to the server ({@code craftify:lyricsline}) when sharing is
+     * enabled and the line changed; sends an empty line to clear the hologram when sharing
+     * is off or there is nothing to show. A pause does not change the line, so the server
+     * keeps the last one frozen.
+     */
+    private void maybeSendSharedLine() {
+        if (!shared) {
+            if (lastSharedLine != null) {
+                sendSharedLine("");
+                lastSharedLine = null;
+            }
+            return;
+        }
+        List<LyricLine> lyricLines = lines;
+        if (currentTrack == null || lyricLines == null || lyricLines.isEmpty()) {
+            if (!"".equals(lastSharedLine)) {
+                sendSharedLine("");
+                lastSharedLine = "";
+            }
+            return;
+        }
+        int index = paused ? frozenIndex : computeIndex(System.currentTimeMillis());
+        String line = index >= 0 && index < lyricLines.size() ? lyricLines.get(index).text() : "";
+        if (!line.equals(lastSharedLine)) {
+            sendSharedLine(line);
+            lastSharedLine = line;
+        }
+    }
+
+    private void sendSharedLine(String line) {
+        try {
+            ClientPlayNetworking.send(LyricsLinePayload.of(line));
+        } catch (IllegalStateException e) {
+            // No longer connected to a world; sharing resumes on the next JOIN.
+        }
     }
 
     /** Whether the lyrics overlay is enabled. */
@@ -109,6 +156,15 @@ public final class LyricsManager {
 
     public void setEnabled(boolean value) {
         enabled = value;
+    }
+
+    /** Whether the current lyric line is shared with other players (server hologram). */
+    public boolean isShared() {
+        return shared;
+    }
+
+    public void setShared(boolean value) {
+        shared = value;
     }
 
     private void onPlaying(String track) {
@@ -215,11 +271,11 @@ public final class LyricsManager {
             return; // still loading
         }
         Font font = Minecraft.getInstance().font;
-        int centerX = extractor.guiWidth() / 2;
+        int leftX = LEFT_MARGIN;
         int bottomY = extractor.guiHeight() - 54;
 
         if (instrumental) {
-            drawBlock(extractor, font, centerX, bottomY, "♪ Instrumental",
+            drawBlock(extractor, font, leftX, bottomY, "♪ Instrumental",
                     List.of(), List.of());
             return;
         }
@@ -246,7 +302,7 @@ public final class LyricsManager {
                 colors.add(COLOR_NEXT);
             }
         }
-        drawBlock(extractor, font, centerX, bottomY, "♪ " + currentTrack, shown, colors);
+        drawBlock(extractor, font, leftX, bottomY, "♪ " + currentTrack, shown, colors);
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOGGER.info("Lyrics: overlay drawing ({} line(s) loaded)", lyricLines.size());
@@ -291,8 +347,8 @@ public final class LyricsManager {
         return renderCount;
     }
 
-    /** Draws the subtitle block: header + stacked lines with a shared backdrop. */
-    private void drawBlock(GuiGraphicsExtractor extractor, Font font, int centerX, int bottomY,
+    /** Draws the subtitle block: header + stacked lines with a shared backdrop, left-aligned. */
+    private void drawBlock(GuiGraphicsExtractor extractor, Font font, int leftX, int bottomY,
                            String header, List<String> lines, List<Integer> colors) {
         int lineHeight = font.lineHeight;
         int topY = bottomY - (lines.size() - 1) * lineHeight;
@@ -301,12 +357,12 @@ public final class LyricsManager {
         for (String line : lines) {
             maxWidth = Math.max(maxWidth, font.width(line));
         }
-        int x1 = centerX - maxWidth / 2 - 6;
-        int x2 = centerX + maxWidth / 2 + 6;
+        int x1 = leftX - 2;
+        int x2 = leftX + maxWidth + 6;
         extractor.fill(x1, topY - lineHeight - 5, x2, bottomY + lineHeight + 2, COLOR_BACKDROP);
-        extractor.centeredText(font, header, centerX, topY - lineHeight - 3, COLOR_HEADER);
+        extractor.text(font, header, leftX, topY - lineHeight - 3, COLOR_HEADER);
         for (int i = 0; i < lines.size(); i++) {
-            extractor.centeredText(font, lines.get(i), centerX, topY + i * lineHeight, colors.get(i));
+            extractor.text(font, lines.get(i), leftX, topY + i * lineHeight, colors.get(i));
         }
     }
 

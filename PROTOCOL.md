@@ -28,11 +28,11 @@ the network, and how the plugin must receive and use them.
 | What | Value |
 |-----|-------|
 | Packet | `minecraft:custom_payload`, `play` phase |
-| Channel | `craftify:title` |
+| Channel | `craftify:title` (§2) and `craftify:lyricsline` (§6) |
 | Direction | Client → Server |
 | Payload | `[VarInt length][UTF-8 bytes of a JSON]` |
-| JSON | `{"state":"...","track":"...","timestamp":...}` |
-| States | `playing` · `no_track` · `closed` |
+| JSON | `{"state":"...","track":"...","timestamp":...}` / `{"line":"..."}` |
+| States | `playing` · `paused` · `no_track` · `closed` |
 | Frequency | **Only when the state changes** (no heartbeat) |
 
 Golden rules:
@@ -337,3 +337,40 @@ The `timestamp` is the client's capture epoch millis. Use it to:
   sees them, regardless of registrations.
 - **Future extension:** adding new channels (e.g. `craftify:playback` with pause/play
   state) does not break this contract: each channel is independent.
+
+---
+
+## 6. Shared lyrics (`craftify:lyricsline`)
+
+An optional channel so the player can show the **current lyric line** to other players.
+
+### 6.1 When the mod sends it
+
+- Only while the player has **"share lyrics"** enabled (mod's F10 menu or
+  `/craftify lyrics share on`). Disabled by default — each player chooses whether to
+  share.
+- Sent on a **line change** while a song is playing. A **pause** sends nothing (the
+  server keeps the last line frozen); a **new song / closed / no active song** sends an
+  empty line to clear the hologram.
+- Toggling sharing **off** sends an empty line once, so the server removes the hologram.
+
+### 6.2 Payload
+
+Same envelope as `craftify:title` (§2.1): `[VarInt length][UTF-8 JSON]`.
+
+```json
+{"line":"First lyric line"}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `line` | string | The lyric line to display; empty clears the hologram. |
+
+### 6.3 How the plugin should use it
+
+- Keep a `TextDisplay` per player (hologram) and update its text with `line`;
+  remove the entity when `line` is empty or the player disconnects.
+- The channel is **opt-in per player**: receiving no packets means the player chose not
+  to share (do not request it, do not show anything).
+- The lyrics data itself is client-side only: the mod fetches synced lyrics from LRCLib
+  and only the current line travels over this channel.

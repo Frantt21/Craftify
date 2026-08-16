@@ -30,3 +30,15 @@ hologram:
   height: 2.15
   # Text size (TextDisplay entity scale).
   scale: 0.6
+
+# --- Lyrics hologram (optional) ----------------------------------------------------
+# Shows the current lyric line the player chooses to share (the mod sends
+# craftify:lyricsline only while the player has "share lyrics" enabled in the mod's F10
+# menu; an empty line clears it and a pause keeps the last line frozen).
+lyrics-hologram:
+  # Enables/disables the lyrics hologram.
+  enabled: true
+  # Height above the player, in blocks.
+  height: 1.85
+  # Text size (TextDisplay entity scale).
+  scale: 0.6

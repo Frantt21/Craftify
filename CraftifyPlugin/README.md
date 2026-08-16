@@ -54,11 +54,21 @@ hologram:
   icon: "♪ "       # music icon glyph (default font; try "♫ " if it doesn't render)
   height: 2.15    # height above the player, in blocks
   scale: 0.6      # text size
+
+lyrics-hologram:
+  enabled: true   # shows the shared lyric line (opt-in per player, PROTOCOL.md §6)
+  height: 1.85    # height above the player, in blocks
+  scale: 0.6      # text size
 ```
 
 The name tag renders as `prefix + name + suffix` on a single line (vanilla does not
 render multi-line player name tags). With a `state` other than `playing` (or no title)
 the prefix/suffix are cleared and the nametag goes back to normal.
+
+The **lyrics hologram** shows the current lyric line of players who enabled **"Share
+lyrics with others"** in the mod (F10 menu): the mod sends `craftify:lyricsline` only on
+line changes (empty line clears it, a pause keeps the last line frozen), so the hologram
+is opt-in per player and never rendered for players who don't share.
 
 ### Supported colors and formats (MiniMessage)
 
@@ -115,6 +125,8 @@ the server's `plugins` folder (Paper).
 | `command/CraftifyCommand` | `/craftifyplugin reload`: reloads config + re-applies states (`craftifyplugin.reload`) |
 | `nametag/NametagManager` | Shows the title in the player's floating name via scoreboard teams (prefix/suffix, no lag) |
 | `hologram/HologramManager` | Optional `TextDisplay` hologram (icon + title) |
+| `LyricsListener` | `PluginMessageListener`: decodes `craftify:lyricsline` (VarInt + UTF-8 + JSON) |
+| `hologram/LyricsHologramManager` | `TextDisplay` hologram with the shared lyric line |
 
 ## Quick test
 

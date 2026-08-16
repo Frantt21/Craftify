@@ -9,9 +9,11 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import org.foranly.craftify.client.gui.LyricsOptionsScreen;
 import org.foranly.craftify.client.lyrics.LrclibClient;
 import org.foranly.craftify.client.lyrics.LrclibClient.SearchCandidate;
 import org.foranly.craftify.client.lyrics.LrclibClient.SearchOutcome;
+import org.foranly.craftify.client.lyrics.LyricsManager;
 import org.foranly.craftify.client.lyrics.LyricsManager;
 import org.foranly.craftify.client.spotify.SpotifyProcess;
 import org.foranly.craftify.client.spotify.SpotifyTracker;
@@ -37,12 +39,20 @@ public final class SpotifyCommand {
                         .then(ClientCommands.literal("toggle")
                                 .executes(ctx -> setSending(ctx, !SpotifyTracker.isPaused()))))
                 .then(ClientCommands.literal("lyrics")
+                        .executes(ctx -> openLyricsScreen(ctx))
                         .then(ClientCommands.literal("on")
                                 .executes(ctx -> setLyrics(ctx, true)))
                         .then(ClientCommands.literal("off")
                                 .executes(ctx -> setLyrics(ctx, false)))
                         .then(ClientCommands.literal("toggle")
                                 .executes(ctx -> setLyrics(ctx, !LyricsManager.instance().isEnabled())))
+                        .then(ClientCommands.literal("share")
+                                .then(ClientCommands.literal("on")
+                                        .executes(ctx -> setShared(ctx, true)))
+                                .then(ClientCommands.literal("off")
+                                        .executes(ctx -> setShared(ctx, false)))
+                                .then(ClientCommands.literal("toggle")
+                                        .executes(ctx -> setShared(ctx, !LyricsManager.instance().isShared()))))
                         .then(ClientCommands.literal("search")
                                 .executes(ctx -> searchLyrics(ctx, null))
                                 .then(ClientCommands.argument("query", StringArgumentType.greedyString())
@@ -74,6 +84,12 @@ public final class SpotifyCommand {
                 .withStyle(ChatFormatting.GOLD)
                 .append(Component.literal(lyrics.isEnabled() ? "enabled (LRCLib)" : "disabled (/craftify lyrics on)")
                         .withStyle(lyrics.isEnabled() ? ChatFormatting.GREEN : ChatFormatting.GRAY)));
+        source.sendFeedback(Component.literal("[Craftify] Lyrics share: ")
+                .withStyle(ChatFormatting.GOLD)
+                .append(Component.literal(lyrics.isShared()
+                                ? "shared with others (hologram)"
+                                : "only you (F10 or /craftify lyrics)")
+                        .withStyle(lyrics.isShared() ? ChatFormatting.GREEN : ChatFormatting.GRAY)));
 
         String track = lyrics.currentTrack();
         String status = lyrics.fetchStatus();
@@ -182,6 +198,19 @@ public final class SpotifyCommand {
 
     private static String formatDuration(int seconds) {
         return (seconds / 60) + ":" + String.format(java.util.Locale.ROOT, "%02d", seconds % 60);
+    }
+
+    private static int openLyricsScreen(CommandContext<FabricClientCommandSource> context) {
+        Minecraft.getInstance().setScreenAndShow(new LyricsOptionsScreen());
+        return 1;
+    }
+
+    private static int setShared(CommandContext<FabricClientCommandSource> context, boolean shared) {
+        LyricsManager.instance().setShared(shared);
+        context.getSource().sendFeedback(Component.literal("[Craftify] Sharing lyrics with others "
+                + (shared ? "enabled (server hologram)." : "disabled (only you)."))
+                .withStyle(shared ? ChatFormatting.GREEN : ChatFormatting.YELLOW));
+        return 1;
     }
 
     private static int setLyrics(CommandContext<FabricClientCommandSource> context, boolean enabled) {
