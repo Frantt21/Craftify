@@ -41,8 +41,9 @@ Golden rules:
    updates.
 2. Store the state per UUID and **remove it when the player disconnects**.
 3. Use `timestamp` to discard old/duplicate packets.
-4. `playing` does not necessarily mean "currently playing": the mod does not distinguish
-   pause (the window title does not change when paused).
+4. The mod **distinguishes pause**: `playing` means the song is actively playing,
+   `paused` means Spotify is open but paused (no active song). Very old mod versions
+   could report `playing` while paused — treat `paused` as an optional refinement.
 5. `track` is a single string `"Song - Artist"`; splitting title and artist is the
    plugin's job (e.g. by the last ` - `).
 
@@ -53,17 +54,23 @@ Golden rules:
 ### 1.1 Chain summary
 
 1. **`SpotifyProcess.readSnapshot(os)`** probes the player's operating system (a single
-   query per poll) and returns `(running, title)`:
+   query per poll) and returns `(status, title)` where `status` is `CLOSED` / `PLAYING` /
+   `PAUSED` / `UNKNOWN`:
    - Windows: native JNA probe (`Toolhelp32` + `EnumWindows`), ~10–60 ms. Windows are
      identified **by PID** (not by module name) and the title stays available with Spotify
      **minimized or in the tray** (second pass over hidden windows, skipping auxiliary
-     IME/GDI+ windows).
-   - macOS: native JNA/CoreGraphics probe (`CGWindowListCopyWindowInfo`), ~1–10 ms. It only
-     lists windows in the current session; the title requires the Screen Recording
-     permission.
+     IME/GDI+ windows). Pause is detected because the window title reverts to the account
+     tier (`"Spotify Free"`/`"Spotify Premium"`) while paused.
+   - macOS: native JNA/CoreGraphics probe (`CGWindowListCopyWindowInfo`), ~1–10 ms, only
+     to detect the process (it only lists windows in the current session). The **state and
+     track** come from Spotify's own AppleScript dictionary (one Automation prompt; the
+     window title on macOS shows the account tier, never the song), ~200–500 ms: `player
+     state` gives playing/paused and `current track` the song.
    - Linux: `playerctl` (MPRIS) as the main probe — **the mod bundles the official
      playerctl binary inside the JAR** (extracted to the user's temp directory, no sudo)
-     with a fallback to the system `playerctl` and then `pgrep` + `xdotool`.
+     with a fallback to the system `playerctl` and then `pgrep` + `xdotool`. A single
+     invocation returns `PlaybackStatus` (Playing/Paused/Stopped) plus the metadata; the
+     `xdotool` fallback has no pause info (a readable title means `playing`).
    - All platforms have a CLI fallback if the native probe is not available.
 2. **`SpotifyTracker`** (a `daemon` thread) queries that snapshot while the player is in a
    world and decides whether the state changed.
@@ -138,7 +145,7 @@ A typical song title takes less than 200 bytes, well below the small-payload lim
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `state` | string | One of the three states (table below). |
+| `state` | string | One of the four states (table below). |
 | `track` | string | Song title (`"Song - Artist"`); empty when there is no active song. |
 | `timestamp` | number (long) | Epoch millis of the capture moment. |
 
@@ -146,8 +153,9 @@ A typical song title takes less than 200 bytes, well below the small-payload lim
 
 | `state` | Meaning | `track` |
 |---------|-------------|---------|
-| `playing` | Spotify is running and there is a readable title (active song). The song may be paused: the title does not distinguish pause/play. | The title |
-| `no_track` | Spotify is running but no song could be read (OS permissions not granted, or on macOS/Linux when the window is not readable — on Windows it is read even when in the tray). | `""` |
+| `playing` | Spotify is running and there is an active song. | The title |
+| `paused` | Spotify is running but paused (no active song). Detected per OS: Windows — the window title reverts to the account tier (`"Spotify Free"`/`"Spotify Premium"`); macOS — Spotify's `player state`; Linux — MPRIS `PlaybackStatus` via `playerctl`. | `""` |
+| `no_track` | Spotify is running but its state could not be determined (OS permissions not granted — e.g. the macOS Automation prompt denied — or the window not readable on Linux). | `""` |
 | `closed` | Spotify is not running. | `""` |
 
 ---
@@ -303,19 +311,23 @@ The `timestamp` is the client's capture epoch millis. Use it to:
 - **No handshake or ACK:** the channel is used as-is; the server acknowledges nothing.
 - **Latency:** a change takes ≤ ~0.5–0.6 s to be detected (500 ms poll interval + probe
   cost).
-- **`playing` ≠ playing:** the window title does not change on pause; the mod does not
-  distinguish pause/play. A future packet with playback state (e.g. via MPRIS) is a natural
-  extension of the protocol.
+- **Pause detection by platform:** Windows — the window title reverts to the account tier
+  while paused; macOS — Spotify's `player state` via AppleScript; Linux — MPRIS
+  `PlaybackStatus` via `playerctl`. The `xdotool` fallback on Linux cannot detect pause
+  (it reports `playing` or `no_track`).
 - **OS permissions (client):** on macOS detecting the process needs no permissions; for the
-  title, the lowest-friction path is Spotify's own AppleScript dictionary (a single
-  Automation prompt), with Screen Recording and Accessibility as alternatives. On Linux,
+  track, the mod uses Spotify's own AppleScript dictionary (a single Automation prompt —
+  the window title shows the account tier, not the song, so Screen Recording/Accessibility
+  do not help). On Linux,
   `playerctl` (MPRIS, no permissions) is used **bundled in the mod's JAR** (extracted to
   the user's temp dir, no sudo), with `xdotool` as a fallback. Spotify's local API
   (port 4380) no longer exists on modern clients.
 - **Hidden window by platform:** on Windows the title keeps being read with Spotify
   minimized or in the tray (so the plugin will keep receiving `playing` even if the player
-  hides it). On macOS and Linux, if the window stops being readable the mod switches to
-  `no_track` — the plugin should not treat that as "Spotify closed".
+  hides  it). On macOS the track is read via Spotify's AppleScript dictionary (works even with
+  the window hidden); if that permission is missing, or on Linux if the window stops being
+  readable, the mod switches to `no_track` — the plugin should not treat that as "Spotify
+  closed".
 - **Size:** the payload is small; Fabric's payload limits (regular `register`) are not a
   problem for song titles.
 - **Fabric without the type registered:** a Fabric server drops payloads whose type has no

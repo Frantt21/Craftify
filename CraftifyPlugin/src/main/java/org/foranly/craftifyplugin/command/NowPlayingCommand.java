@@ -39,6 +39,8 @@ public final class NowPlayingCommand implements CommandExecutor {
             case PlayerSpotifyState.STATE_PLAYING -> player.sendMessage(
                     Component.text("Listening to: ", NamedTextColor.GREEN)
                             .append(Component.text(state.track(), NamedTextColor.WHITE)));
+            case PlayerSpotifyState.STATE_PAUSED -> player.sendMessage(
+                    Component.text("Spotify paused.", NamedTextColor.YELLOW));
             case PlayerSpotifyState.STATE_NO_TRACK -> player.sendMessage(
                     Component.text("Spotify open, no active song.", NamedTextColor.YELLOW));
             case PlayerSpotifyState.STATE_CLOSED -> player.sendMessage(

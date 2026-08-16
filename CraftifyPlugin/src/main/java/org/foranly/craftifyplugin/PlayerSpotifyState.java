@@ -13,6 +13,7 @@ public record PlayerSpotifyState(String state, String track, long timestamp) {
 
     /** Protocol states (PROTOCOL.md §2.3). */
     public static final String STATE_PLAYING = "playing";
+    public static final String STATE_PAUSED = "paused";
     public static final String STATE_NO_TRACK = "no_track";
     public static final String STATE_CLOSED = "closed";
 

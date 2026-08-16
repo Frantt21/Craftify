@@ -10,10 +10,11 @@ import org.foranly.craftify.client.network.SpotifyTitlePayload;
  * Monitors the Spotify state while the player is in a world and sends a {@code craftify:title}
  * packet to the server every time that state changes.
  *
- * <p>The payload distinguishes three states:
+ * <p>The payload distinguishes four states:
  * <ul>
  *   <li>{@code playing}: Spotify running with a readable title (active song);</li>
- *   <li>{@code no_track}: Spotify running but without a readable active song;</li>
+ *   <li>{@code paused}: Spotify running but paused (no active song);</li>
+ *   <li>{@code no_track}: Spotify running but its state could not be determined;</li>
  *   <li>{@code closed}: Spotify closed.</li>
  * </ul>
  *
@@ -95,15 +96,24 @@ public final class SpotifyTracker {
 
                 String state;
                 String track;
-                if (!snapshot.running()) {
-                    state = SpotifyTitlePayload.STATE_CLOSED;
-                    track = "";
-                } else if (snapshot.title() == null) {
-                    state = SpotifyTitlePayload.STATE_NO_TRACK;
-                    track = "";
-                } else {
-                    state = SpotifyTitlePayload.STATE_PLAYING;
-                    track = snapshot.title();
+                switch (snapshot.status()) {
+                    case CLOSED -> {
+                        state = SpotifyTitlePayload.STATE_CLOSED;
+                        track = "";
+                    }
+                    case PLAYING -> {
+                        state = SpotifyTitlePayload.STATE_PLAYING;
+                        track = snapshot.title();
+                    }
+                    case PAUSED -> {
+                        state = SpotifyTitlePayload.STATE_PAUSED;
+                        track = "";
+                    }
+                    default -> {
+                        // UNKNOWN: running but the state could not be determined.
+                        state = SpotifyTitlePayload.STATE_NO_TRACK;
+                        track = "";
+                    }
                 }
 
                 // Send only when the state + title combination changes (and not paused).

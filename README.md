@@ -18,18 +18,21 @@ must receive it — is defined in [`PROTOCOL.md`](PROTOCOL.md).
 │  Client: CraftifyMod         │ ─────────────────────────────────►  │  Server: CraftifyPlugin      │
 │                              │                                     │                              │
 │  Detects Spotify on the OS   │   {"state":"playing",               │  Stores the state per        │
-│  Reads the window title      │    "track":"Song - Artist",         │  player (UUID)               │
+│  Reads song + pause state    │    "track":"Song - Artist",         │  player (UUID)               │
 │  Sends ONLY on changes       │    "timestamp": ...}                │  Nametag + /nowplaying       │
 │  Shows own name in 3rd person│                                     │  (hologram optional)         │
 └──────────────────────────────┘                                     └──────────────────────────────┘
 ```
 
 1. **The mod** runs on the client and is the only component with access to the player's
-   operating system: it detects the Spotify process (Windows/macOS/Linux) and reads its
-   window title, which changes with each song (typically `Song - Artist`).
+   operating system: it detects the Spotify process (Windows/macOS/Linux) and reads the
+   current song and its **pause state** (playing / paused / closed). On Windows it reads
+   the window title (it changes with each song, typically `Song - Artist`, and reverts to
+   the account tier when paused); on macOS both come from Spotify's own AppleScript
+   dictionary; on Linux from MPRIS via `playerctl`.
 2. **Only when the state changes** (new song, Spotify closed, etc.) it sends a
    `minecraft:custom_payload` packet on the `craftify:title` channel with a three-field
-   JSON: `state`, `track` and `timestamp`.
+   JSON: `state` (`playing` / `paused` / `no_track` / `closed`), `track` and `timestamp`.
 3. **The plugin** runs on the server, decodes the payload and keeps the latest state per
    player. Today it displays it in the player's **floating nametag** — via scoreboard
    teams (prefix + name + suffix, on a single line; vanilla ignores the custom name for
@@ -51,7 +54,7 @@ defined in [`PROTOCOL.md`](PROTOCOL.md).
   what it does today (channel reception, per-player state, nametag via scoreboard teams,
   `/nowplaying`, `/craftifyplugin reload`), configuration and build.
 - **PROTOCOL.md** ([`PROTOCOL.md`](PROTOCOL.md)) — the contract between both: exact on-wire
-  byte format, the 3 possible states and how the plugin must receive/decode them (with
+  byte format, the 4 possible states and how the plugin must receive/decode them (with
   Paper and Fabric examples).
 
 ## Current status
@@ -80,7 +83,7 @@ against Java 25).
 
 ## Roadmap
 
-1. [x] Detect the Spotify process and read the title (`/craftify spotify`).
+1. [x] Detect the Spotify process, read the title and the pause state (`/craftify spotify`).
 2. [x] Send `craftify:title` packets to the server when the title changes.
 3. [x] (skeleton) Paper plugin that receives the channel and stores the state per player +
    nametag/hologram.

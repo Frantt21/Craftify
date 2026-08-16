@@ -45,13 +45,22 @@ public final class WindowsSpotify {
     /**
      * State read with a single native probe.
      *
+     * <p>On Windows the window title reverts to the account tier ("Spotify Free"/"Spotify
+     * Premium") while paused, so running without a song title means {@link Status#PAUSED}.
+     *
      * @throws com.sun.jna.UnsatisfiedLinkError or another {@link Error} if JNA is not
      *         available; the caller must fall back to the CLI in that case
      */
     public static SpotifyProcess.Snapshot read() {
         Set<Integer> pids = spotifyPids();
-        boolean running = !pids.isEmpty();
-        return new SpotifyProcess.Snapshot(running, running ? windowTitle(pids) : null);
+        if (pids.isEmpty()) {
+            return new SpotifyProcess.Snapshot(SpotifyProcess.Status.CLOSED, null);
+        }
+        String title = windowTitle(pids);
+        if (title == null || SpotifyProcess.isAccountTierTitle(title)) {
+            return new SpotifyProcess.Snapshot(SpotifyProcess.Status.PAUSED, null);
+        }
+        return new SpotifyProcess.Snapshot(SpotifyProcess.Status.PLAYING, title);
     }
 
     // --- Toolhelp32: Spotify.exe PIDs ---

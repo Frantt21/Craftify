@@ -21,8 +21,8 @@ import net.minecraft.resources.Identifier;
  * }</pre>
  *
  * <ul>
- *   <li>{@code state}: one of {@value #STATE_PLAYING}, {@value #STATE_NO_TRACK} or
- *       {@value #STATE_CLOSED}.</li>
+ *   <li>{@code state}: one of {@value #STATE_PLAYING}, {@value #STATE_PAUSED},
+ *       {@value #STATE_NO_TRACK} or {@value #STATE_CLOSED}.</li>
  *   <li>{@code track}: title read from Spotify; empty when there is no active song.</li>
  *   <li>{@code timestamp}: epoch millis of the capture moment.</li>
  * </ul>
@@ -31,6 +31,8 @@ public record SpotifyTitlePayload(String json) implements CustomPacketPayload {
 
     /** Spotify is running and there is a readable title (active song). */
     public static final String STATE_PLAYING = "playing";
+    /** Spotify is running but paused (no active song). */
+    public static final String STATE_PAUSED = "paused";
     /** Spotify is running but there is no active song (or the window is not readable). */
     public static final String STATE_NO_TRACK = "no_track";
     /** Spotify is not running. */

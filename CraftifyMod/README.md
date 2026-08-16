@@ -14,29 +14,44 @@ communication contract is in [`../PROTOCOL.md`](../PROTOCOL.md).
 
 ## Spotify detection
 
-The mod detects the Spotify process running on the player's OS and reads its window title,
-which changes with each song (typically `Song - Artist`). On Windows the title keeps being
-read even when Spotify is **minimized or in the tray** (the hidden window keeps its text;
-only auxiliary IME/GDI+ windows are skipped).
+The mod detects the Spotify process running on the player's OS and reads its **playback
+state** (playing / paused / closed) and the **current song**. On Windows the title keeps
+being read even when Spotify is **minimized or in the tray** (the hidden window keeps its
+text; only auxiliary IME/GDI+ windows are skipped).
+
+### Pause detection
+
+The mod also detects when Spotify is **paused** (no active song), per OS:
+
+- **Windows:** the window title reverts to the account tier (`"Spotify Free"`/`"Spotify
+  Premium"`) while paused — "Spotify running without a song title" means paused, with no
+  extra cost.
+- **macOS:** Spotify's `player state` (`playing`/`paused`/`stopped`) via the same
+  AppleScript call that reads the track.
+- **Linux:** MPRIS `PlaybackStatus` via `playerctl` (same single invocation as the
+  metadata). The `xdotool` fallback cannot detect pause (a readable title means playing).
 
 ### Supported executables (one per OS)
 
 | OS      | Executable    | Process detection        | Title reading |
 |---------|---------------|------------------------------|--------------------|
 | Windows | `Spotify.exe` | JNA/Win32 (Toolhelp32) with `tasklist` fallback | JNA/Win32 (`EnumWindows` + `GetWindowText`) with PowerShell fallback |
-| macOS   | `Spotify`     | JNA/CoreGraphics (window owner) with `pgrep` fallback | JNA/CoreGraphics → Spotify AppleScript (Automation) → `osascript` |
+| macOS   | `Spotify`     | JNA/CoreGraphics (window owner) with `pgrep` fallback | Spotify AppleScript (Automation) — the native window title is the account tier, not the song, so it is skipped |
 | Linux   | `spotify`     | MPRIS/`playerctl` (implies running); `pgrep -x spotify` fallback | MPRIS/`playerctl` (metadata) with `xdotool` fallback (window) |
 
 ### Requirements per OS
 
 - **Windows**: uses a native probe (JNA/Win32) without extra permissions; PowerShell is
   only used as a fallback if JNA is unavailable.
-- **macOS**: detecting the process needs no permissions. For the **title**, the easiest
-  path is accepting the one-time **"control Spotify"** (Automation) prompt when it appears
-  when you join the game — one click, no need to open System Settings. Alternatives if you
-  prefer: the **Screen Recording** permission (System Settings → Privacy & Security →
-  Screen Recording) or **Accessibility** (last resort). With any of the three the title is
-  read; without any, the state stays `no_track`.
+- **macOS**: detecting the process needs no permissions. For the **track and the
+  pause/play state**, the window title is **not** used: on macOS the Spotify window bar
+  shows the **account tier** ("Spotify Free"/"Spotify Premium", regardless of the song),
+  never the song title. Both come from **Spotify's own AppleScript dictionary** (`player
+  state` + `current track`) — the easiest path is accepting the one-time **"control
+  Spotify"** (Automation) prompt when it appears when you join the game, one click, no
+  need to open System Settings. Without that permission the state stays `no_track`.
+  (Screen Recording / Accessibility do **not** help here: the window title never contains
+  the song.)
 - **Linux**: uses **MPRIS** via `playerctl` as the main probe: a single invocation gives
   process + title, works with the window minimized, **no permissions** and no X11/Wayland
   dependency. **You don't need to install anything with sudo**: the mod bundles the
@@ -95,7 +110,8 @@ the client hides it because the local player matches the camera
 
 The mod enables it: with the camera in third person (F5), you will see your **own name**
 floating above your head — and, if the server runs the plugin in nametag mode, also the
-song you're listening to (the plugin uses `customName`, which the mixin displays).
+song you're listening to (the plugin renders it via scoreboard teams, which the mixin
+displays).
 
 - Implementation: `LivingEntityRendererMixin` (registered in
   `craftify.client.mixins.json`), injected into `shouldShowName`.
@@ -112,7 +128,8 @@ the server **only when the state changes** (not in a loop):
 - **every ~5 s** (backoff) when Spotify is closed, to avoid wasting resources;
 - joining a world sends the initial state;
 - every song change sends `state: "playing"` with the new title;
-- if Spotify is running but no song is readable, it sends `state: "no_track"`;
+- when Spotify is paused, it sends `state: "paused"` (empty track);
+- if Spotify is running but its state could not be determined, it sends `state: "no_track"`;
 - when Spotify closes, it sends `state: "closed"`.
 
 Sending can be **paused and resumed** with [`/craftify send`](#craftify-send--pauseresume-packet-sending).
@@ -131,18 +148,21 @@ The cost of each query was measured (Windows 11, Java 26):
 | Old Windows poll (tasklist + PowerShell) | ~1,060 ms |
 | **Current Windows poll (JNA/Win32)** | **~10–60 ms** (first native load ~500 ms) |
 | `osascript` (title, macOS) | ~200–500 ms |
-| **Current macOS poll (JNA/CoreGraphics)** | **~1–10 ms** (only the title needs Screen Recording) |
+| **Current macOS poll** | **~1–10 ms** native process check + **~200–500 ms** AppleScript for the track (the window title is the account tier, not the song) |
 | Linux poll (`playerctl` or `pgrep` + `xdotool`) | ~10–80 ms (light OS processes) |
 
 The bottleneck was **PowerShell startup** (~1.1 s per invocation) on Windows and
 **AppleScript startup** (~200–500 ms) on macOS. That's why the mod uses **native JNA
-probes** on both: `Toolhelp32` + `EnumWindows` on Windows, `CGWindowListCopyWindowInfo` on
-macOS — on the order of milliseconds. If JNA is unavailable, it falls back to the CLI
-(slow but functional). On Linux the OS processes are already light, so the probe uses
-`playerctl` (MPRIS) as the main method and `xdotool` as a backup.
+probes** for process detection on both: `Toolhelp32` + `EnumWindows` on Windows,
+`CGWindowListCopyWindowInfo` on macOS — on the order of milliseconds. On Windows the
+native probe also reads the title (its window title does change with the song); on macOS
+the track comes from Spotify's AppleScript dictionary, since the window title never
+contains the song. If JNA is unavailable, it falls back to the CLI (slow but functional).
+On Linux the OS processes are already light, so the probe uses `playerctl` (MPRIS) as the
+main method and `xdotool` as a backup.
 
-With the 500 ms interval, each effective cycle lasts ~0.5–0.6 s on any platform, with
-negligible CPU cost.
+With the 500 ms interval, each effective cycle lasts ~0.5–0.6 s on Windows and Linux and
+~0.5–1 s on macOS while playing, with negligible CPU cost.
 
 ## Build
 

@@ -11,7 +11,7 @@ import org.foranly.craftify.client.spotify.SpotifyTracker;
 
 /**
  * {@code /craftify spotify} command: verifies that the mod correctly detects the Spotify
- * process and reads its window title on the current operating system.
+ * process and reads its playback state and current song on the current operating system.
  */
 public final class SpotifyCommand {
 
@@ -62,30 +62,32 @@ public final class SpotifyCommand {
             return 0;
         }
 
-        boolean running = SpotifyProcess.isRunning(os);
+        SpotifyProcess.Snapshot snapshot = SpotifyProcess.readSnapshot(os);
         source.sendFeedback(Component.literal("[Craftify] Spotify process (" + os.executable() + "): ")
                 .withStyle(ChatFormatting.GOLD)
-                .append(running
+                .append(snapshot.running()
                         ? Component.literal("running").withStyle(ChatFormatting.GREEN)
                         : Component.literal("not found").withStyle(ChatFormatting.RED)));
 
-        if (running) {
-            String title = SpotifyProcess.readTitle(os);
-            if (title == null) {
-                source.sendFeedback(Component.literal("[Craftify] State: ")
-                        .withStyle(ChatFormatting.GOLD)
-                        .append(Component.literal("no active song (no_track)").withStyle(ChatFormatting.YELLOW)));
-                sendNoTrackHint(source, os);
-            } else {
+        switch (snapshot.status()) {
+            case PLAYING -> {
                 source.sendFeedback(Component.literal("[Craftify] State: ")
                         .withStyle(ChatFormatting.GOLD)
                         .append(Component.literal("playing").withStyle(ChatFormatting.GREEN)));
                 source.sendFeedback(Component.literal("[Craftify] Current title: ")
                         .withStyle(ChatFormatting.GOLD)
-                        .append(Component.literal(title).withStyle(ChatFormatting.WHITE)));
+                        .append(Component.literal(snapshot.title()).withStyle(ChatFormatting.WHITE)));
             }
-        } else {
-            source.sendFeedback(Component.literal("[Craftify] State: ")
+            case PAUSED -> source.sendFeedback(Component.literal("[Craftify] State: ")
+                    .withStyle(ChatFormatting.GOLD)
+                    .append(Component.literal("paused").withStyle(ChatFormatting.YELLOW)));
+            case UNKNOWN -> {
+                source.sendFeedback(Component.literal("[Craftify] State: ")
+                        .withStyle(ChatFormatting.GOLD)
+                        .append(Component.literal("no active song (no_track)").withStyle(ChatFormatting.YELLOW)));
+                sendNoTrackHint(source, os);
+            }
+            default -> source.sendFeedback(Component.literal("[Craftify] State: ")
                     .withStyle(ChatFormatting.GOLD)
                     .append(Component.literal("Spotify closed (closed)").withStyle(ChatFormatting.RED)));
         }
@@ -100,11 +102,11 @@ public final class SpotifyCommand {
         return 1;
     }
 
-    /** Suggests what to do when the title could not be read, per operating system. */
+    /** Suggests what to do when the state could not be determined, per operating system. */
     private static void sendNoTrackHint(FabricClientCommandSource source, SpotifyProcess.Os os) {
         Component hint = switch (os) {
-            case MACOS -> Component.literal("[Craftify] To read the title: accept the \"control Spotify\" prompt "
-                    + "when it appears (once), or grant Screen Recording.")
+            case MACOS -> Component.literal("[Craftify] To read the track: accept the \"control Spotify\" "
+                    + "prompt when it appears (once).")
                     .withStyle(ChatFormatting.GRAY);
             case LINUX -> Component.literal("[Craftify] No title: the mod bundles playerctl; as a backup "
                     + "install xdotool (e.g. sudo apt install xdotool) or the system playerctl.")

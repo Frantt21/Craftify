@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Detects the Spotify process running on the player's operating system and reads its
- * window title, which changes with each song.
+ * playback state (playing / paused / closed) and the current song.
  *
  * <p>Each operating system uses a different executable:
  * <ul>
@@ -25,8 +25,24 @@ import java.util.concurrent.TimeUnit;
  */
 public final class SpotifyProcess {
 
-    /** Result of a read: whether Spotify is running and, if so, the title. */
-    public record Snapshot(boolean running, String title) {
+    /** Playback state of the Spotify process. */
+    public enum Status {
+        /** Spotify is not running. */
+        CLOSED,
+        /** Spotify is running with an active song. */
+        PLAYING,
+        /** Spotify is running but paused (no active song). */
+        PAUSED,
+        /** Spotify is running but its state could not be determined. */
+        UNKNOWN
+    }
+
+    /** Result of a read: the playback state and, if applicable, the current song. */
+    public record Snapshot(Status status, String title) {
+        /** Whether the Spotify process is running. */
+        public boolean running() {
+            return status != Status.CLOSED;
+        }
     }
 
     /** Operating systems supported by the mod. */
@@ -71,31 +87,22 @@ public final class SpotifyProcess {
     }
 
     /**
-     * Reads the Spotify state in one go: whether it is running and, if so, the title.
-     * A single probe per query (a native call on Windows, light processes on macOS/Linux)
-     * so the polling stays cheap.
+     * Reads the Spotify state in one go: playback state + current song. A single probe per
+     * query (a native call on Windows, light processes on macOS/Linux) so the polling stays
+     * cheap.
      */
     public static Snapshot readSnapshot(Os os) {
         return switch (os) {
             case WINDOWS -> readWindowsSnapshot();
             case MACOS -> readMacosSnapshot();
             case LINUX -> readLinuxSnapshot();
-            case UNSUPPORTED -> new Snapshot(false, null);
+            case UNSUPPORTED -> new Snapshot(Status.CLOSED, null);
         };
     }
 
     /** Whether the Spotify process is running on the given OS. */
     public static boolean isRunning(Os os) {
         return readSnapshot(os).running();
-    }
-
-    /**
-     * Reads the Spotify title, formatted as "Song - Artist".
-     *
-     * @return the current title, or {@code null} if it could not be obtained
-     */
-    public static String readTitle(Os os) {
-        return readSnapshot(os).title();
     }
 
     // --- Windows ---
@@ -105,8 +112,31 @@ public final class SpotifyProcess {
             return WindowsSpotify.read();
         } catch (Throwable t) {
             // JNA unavailable or failing: fall back to the CLI (slow, but functional).
-            return new Snapshot(isWindowsRunningCli(), readWindowsTitleCli());
+            return toWindowsSnapshot(isWindowsRunningCli(), readWindowsTitleCli());
         }
+    }
+
+    /**
+     * Maps a Windows read to a state. On Windows the window title reverts to the account
+     * tier ("Spotify Free"/"Spotify Premium") while paused, so running without a song
+     * title means paused.
+     */
+    private static Snapshot toWindowsSnapshot(boolean running, String title) {
+        if (!running) {
+            return new Snapshot(Status.CLOSED, null);
+        }
+        if (title == null || isAccountTierTitle(title)) {
+            return new Snapshot(Status.PAUSED, null);
+        }
+        return new Snapshot(Status.PLAYING, title);
+    }
+
+    /** Whether the title is just the Spotify account tier shown in the window bar. */
+    static boolean isAccountTierTitle(String title) {
+        String lower = title.toLowerCase(Locale.ROOT);
+        return lower.equals("spotify")
+                || lower.equals("spotify free")
+                || lower.equals("spotify premium");
     }
 
     private static boolean isWindowsRunningCli() {
@@ -129,18 +159,18 @@ public final class SpotifyProcess {
             jna = null;
         }
         if (jna == null) {
-            // JNA unavailable: CLI (pgrep + osascript).
-            return new Snapshot(isMacosRunningCli(), readMacosTitleCli());
+            // JNA unavailable: pgrep (is it running?) + AppleScript for the state.
+            return readMacosAppleScript(isMacosRunningCli());
         }
-        if (jna.running() && jna.title() == null) {
-            // No native title (missing Screen Recording). From least to most friction:
-            // 1) Spotify's own AppleScript dictionary (a single Automation prompt, works
-            //    even with the window hidden); 2) System Events (Accessibility).
-            String title = readMacosTitleSpotifyDirect();
-            if (title == null) {
-                title = readMacosTitleCli();
-            }
-            return new Snapshot(true, title);
+        if (!jna.running()) {
+            return jna;
+        }
+        if (jna.status() == Status.UNKNOWN) {
+            // No real track in the window title: on macOS it shows the account tier
+            // ("Spotify Free"/"Spotify Premium"), never the song, and the Screen Recording
+            // permission may hide titles too. Query Spotify directly via its AppleScript
+            // dictionary (a single Automation prompt, works even with the window hidden).
+            return readMacosAppleScript(true);
         }
         return jna;
     }
@@ -149,34 +179,74 @@ public final class SpotifyProcess {
         return !run("pgrep", "-x", "Spotify").isBlank();
     }
 
-    /** Title via Spotify's own AppleScript dictionary (no Accessibility needed). */
-    private static String readMacosTitleSpotifyDirect() {
-        return firstNonBlankLine(run("osascript", "-e",
-                "tell application \"Spotify\" to get name of current track & \" - \" & artist of current track"));
-    }
-
-    /** Title via System Events (requires Accessibility). Last resort on macOS. */
-    private static String readMacosTitleCli() {
-        return firstNonBlankLine(run("osascript", "-e",
-                "tell application \"System Events\" to tell process \"Spotify\" to get name of front window"));
+    /**
+     * Resolves the macOS state via Spotify's own AppleScript dictionary (no Accessibility
+     * needed). A single call returns the playback state plus the current track:
+     * {@code playing|Song - Artist}, {@code paused|Song - Artist} or {@code stopped|...}.
+     */
+    private static Snapshot readMacosAppleScript(boolean running) {
+        if (!running) {
+            return new Snapshot(Status.CLOSED, null);
+        }
+        String out = firstNonBlankLine(runChecked("osascript",
+                "-e", "tell application \"Spotify\"",
+                "-e", "set st to player state as text",
+                "-e", "try",
+                "-e", "set tr to (name of current track) & \" - \" & (artist of current track)",
+                "-e", "on error",
+                "-e", "set tr to \"\"",
+                "-e", "end try",
+                "-e", "return st & \"|\" & tr",
+                "-e", "end tell"));
+        if (out == null) {
+            // Automation permission denied or osascript unavailable.
+            return new Snapshot(Status.UNKNOWN, null);
+        }
+        int separator = out.indexOf('|');
+        String state = (separator >= 0 ? out.substring(0, separator) : out).trim().toLowerCase(Locale.ROOT);
+        String track = separator >= 0 ? out.substring(separator + 1).strip() : "";
+        return switch (state) {
+            case "playing" -> track.isEmpty() ? new Snapshot(Status.UNKNOWN, null)
+                                               : new Snapshot(Status.PLAYING, track);
+            case "paused", "stopped" -> new Snapshot(Status.PAUSED, null);
+            default -> new Snapshot(Status.UNKNOWN, null);
+        };
     }
 
     // --- Linux ---
 
     private static Snapshot readLinuxSnapshot() {
-        // 1) MPRIS via playerctl: a single invocation gives running + title, no X11 needed.
-        // Uses the binary bundled in the mod (no sudo); if it could not be extracted, the
-        // system one.
+        // 1) MPRIS via playerctl: a single invocation gives running + playback status +
+        // title, no X11 needed. Uses the binary bundled in the mod (no sudo); if it could
+        // not be extracted, the system one.
         String playerctl = playerctlBinary();
         String mpris = firstNonBlankLine(run(playerctl, "--player=spotify", "metadata", "--format",
-                "{{ artist }} - {{ title }}"));
+                "{{ status }}|{{ artist }} - {{ title }}"));
         if (mpris != null) {
-            return new Snapshot(true, mpris);
+            return parsePlayerctl(mpris);
         }
         // 2) Fallback: pgrep (is it running?) + window title via xdotool.
         boolean running = !run("pgrep", "-x", "spotify").isBlank();
-        String title = running ? readLinuxWindowTitle() : null;
-        return new Snapshot(running, title);
+        if (!running) {
+            return new Snapshot(Status.CLOSED, null);
+        }
+        String title = readLinuxWindowTitle();
+        // xdotool has no pause info; a readable title means playing, otherwise unknown.
+        return title == null ? new Snapshot(Status.UNKNOWN, null)
+                             : new Snapshot(Status.PLAYING, title);
+    }
+
+    /** Maps a playerctl output ({@code status|track}) to a state. */
+    private static Snapshot parsePlayerctl(String out) {
+        int separator = out.indexOf('|');
+        String status = (separator >= 0 ? out.substring(0, separator) : out).trim().toLowerCase(Locale.ROOT);
+        String track = separator >= 0 ? out.substring(separator + 1).strip() : "";
+        return switch (status) {
+            case "playing" -> track.isEmpty() ? new Snapshot(Status.UNKNOWN, null)
+                                               : new Snapshot(Status.PLAYING, track);
+            case "paused", "stopped" -> new Snapshot(Status.PAUSED, null);
+            default -> new Snapshot(Status.UNKNOWN, null);
+        };
     }
 
     /**
@@ -247,6 +317,27 @@ public final class SpotifyProcess {
         } catch (IOException | InterruptedException e) {
             Thread.currentThread().interrupt();
             return "";
+        }
+    }
+
+    /**
+     * Runs a command and returns its output only when it exits successfully ({@code null}
+     * otherwise). Used for commands whose failure must not be mistaken for data, e.g.
+     * {@code osascript} when the Automation permission was denied.
+     */
+    private static String runChecked(String... command) {
+        try {
+            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            boolean finished = process.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                return null;
+            }
+            return process.exitValue() == 0 ? output.strip() : null;
+        } catch (IOException | InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
         }
     }
 }

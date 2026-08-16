@@ -20,9 +20,16 @@ import com.sun.jna.platform.mac.CoreFoundation.CFStringRef;
  * <ul>
  *   <li>the window **owner** (e.g. {@code Spotify}) is always available;</li>
  *   <li>the **name** (title) requires the Screen Recording permission on macOS 10.15+;
- *       if it is missing, the title stays empty and the caller can fall back to
- *       {@code osascript}.</li>
+ *       if it is missing, the title stays empty;</li>
+ *   <li>the main window's title is the **account tier** ("Spotify Free"/"Spotify
+ *       Premium"), never the song, so it is skipped and the caller falls back to
+ *       Spotify's AppleScript dictionary for the real track.</li>
  * </ul>
+ *
+ * <p>The snapshot reports {@link Status#CLOSED} when Spotify is not running,
+ * {@link Status#PLAYING} when a real window title was found, and
+ * {@link Status#UNKNOWN} when it is running but only account-tier titles exist — the
+ * caller resolves the real state via AppleScript in that case.
  */
 public final class MacosSpotify {
 
@@ -68,14 +75,25 @@ public final class MacosSpotify {
                     }
                     running = true;
                     if (title == null) {
-                        title = cfStringValue(window.getValue(nameKey));
+                        String candidate = cfStringValue(window.getValue(nameKey));
+                        // The main window's title is the account tier ("Spotify Free"/
+                        // "Spotify Premium"), never the song. Skip it so the caller falls
+                        // back to Spotify's AppleScript dictionary for the real track.
+                        if (candidate != null && !SpotifyProcess.isAccountTierTitle(candidate)) {
+                            title = candidate;
+                        }
                     }
                 }
             } finally {
                 release(ownerKey);
                 release(nameKey);
             }
-            return new SpotifyProcess.Snapshot(running, title);
+            if (!running) {
+                return new SpotifyProcess.Snapshot(SpotifyProcess.Status.CLOSED, null);
+            }
+            return title == null
+                    ? new SpotifyProcess.Snapshot(SpotifyProcess.Status.UNKNOWN, null)
+                    : new SpotifyProcess.Snapshot(SpotifyProcess.Status.PLAYING, title);
         } finally {
             release(windows);
         }
