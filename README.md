@@ -70,11 +70,11 @@ defined in [`PROTOCOL.md`](PROTOCOL.md).
 ```bash
 # Mod (client)
 cd CraftifyMod
-./gradlew build        # -> CraftifyMod/build/libs/CraftifyMod-1.0.0.jar
+./gradlew build        # -> CraftifyMod/build/libs/CraftifyMod-1.0.1.jar
 
 # Plugin (server)
 cd CraftifyPlugin
-./gradlew build        # -> CraftifyPlugin/build/libs/CraftifyPlugin-1.0.0.jar
+./gradlew build        # -> CraftifyPlugin/build/libs/CraftifyPlugin-1.0.1.jar
 ```
 
 The mod jar goes into the client's `mods` folder; the plugin jar into the server's

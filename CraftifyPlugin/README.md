@@ -99,7 +99,7 @@ cd CraftifyPlugin
 ./gradlew build
 ```
 
-The JAR ends up in `CraftifyPlugin/build/libs/CraftifyPlugin-1.0.0.jar` and installs in
+The JAR ends up in `CraftifyPlugin/build/libs/CraftifyPlugin-1.0.1.jar` and installs in
 the server's `plugins` folder (Paper).
 
 ## Structure

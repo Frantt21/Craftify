@@ -171,7 +171,7 @@ cd CraftifyMod
 ./gradlew build
 ```
 
-The JAR ends up in `CraftifyMod/build/libs/CraftifyMod-1.0.0.jar` and installs like any
+The JAR ends up in `CraftifyMod/build/libs/CraftifyMod-1.0.1.jar` and installs like any
 Fabric mod in the client's `mods` folder.
 
 The playerctl binary is already bundled in the resources; to update or re-fetch it:
@@ -194,7 +194,7 @@ bash scripts/fetch-linux-playerctl.sh
 
 - mod id: craftify
 - mod name: craftify
-- mod version: 1.0.0
+- mod version: 1.0.1
 - main class: org.foranly.craftify.Craftify
 - client entrypoint: org.foranly.craftify.client.CraftifyClient
 
