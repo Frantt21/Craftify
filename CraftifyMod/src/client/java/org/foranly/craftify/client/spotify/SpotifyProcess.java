@@ -201,27 +201,34 @@ public final class SpotifyProcess {
         } catch (Throwable t) {
             jna = null;
         }
-        if (jna == null) {
-            // JNA unavailable: pgrep (is it running?) + AppleScript for the state.
-            return readMacosAppleScript(isMacosRunningCli());
-        }
-        if (!jna.running()) {
-            return jna;
-        }
-        if (jna.status() == Status.UNKNOWN) {
-            // No real track in the window title: on macOS it shows the account tier
-            // ("Spotify Free"/"Spotify Premium"), never the song, and the Screen Recording
-            // permission may hide titles too. Prefer the bundled nowplaying-cli binary
-            // (private MediaRemote framework, reports the track with NO permission prompt)
-            // and only fall back to Spotify's AppleScript dictionary (Automation prompt)
-            // when it is unavailable (Intel Macs) or could not read anything.
-            Snapshot nowPlaying = readMacosNowPlaying();
-            if (nowPlaying != null && nowPlaying.status() != Status.UNKNOWN) {
-                return nowPlaying;
+        boolean running;
+        if (jna != null) {
+            if (jna.status() == Status.PLAYING) {
+                // A real window title was read (Screen Recording granted): use it.
+                return jna;
             }
-            return readMacosAppleScript(true);
+            running = jna.running();
+            if (!running) {
+                return jna;
+            }
+        } else {
+            // JNA unavailable: pgrep (is it running?).
+            running = isMacosRunningCli();
+            if (!running) {
+                return new Snapshot(Status.CLOSED, null);
+            }
         }
-        return jna;
+        // Spotify is running but the native window title is only the account tier
+        // ("Spotify Free"/"Spotify Premium"), never the song, and the Screen Recording
+        // permission may hide titles too. Prefer the bundled nowplaying-cli binary
+        // (private MediaRemote framework, reports the track with NO permission prompt)
+        // and only fall back to Spotify's AppleScript dictionary (Automation prompt)
+        // when the binary is unavailable (Intel Macs) or could not read anything.
+        Snapshot nowPlaying = readMacosNowPlaying();
+        if (nowPlaying != null && nowPlaying.status() != Status.UNKNOWN) {
+            return nowPlaying;
+        }
+        return readMacosAppleScript(true);
     }
 
     /**
@@ -415,13 +422,16 @@ public final class SpotifyProcess {
 
     private static Snapshot readLinuxSnapshot() {
         // 1) MPRIS via playerctl: a single invocation gives running + playback status +
-        // title, no X11 needed. Uses the binary bundled in the mod (no sudo); if it could
-        // not be extracted, the system one.
-        String playerctl = playerctlBinary();
-        String mpris = firstNonBlankLine(run(playerctl, "--player=spotify", "metadata", "--format",
-                "{{ status }}|{{ title }} - {{ artist }}"));
+        // title, no X11/Wayland needed. First the binary bundled in the mod (with its
+        // companion libplayerctl.so.2, so no system package is required); if it cannot
+        // run or reports no Spotify player, the system-installed one on the PATH.
+        String bundled = bundledPlayerctlBinary();
+        Snapshot mpris = bundled != null ? readPlayerctl(bundled, playerctlLibDir()) : null;
+        if (mpris == null) {
+            mpris = readPlayerctl("playerctl", null);
+        }
         if (mpris != null) {
-            return parsePlayerctl(mpris);
+            return mpris;
         }
         // 2) Fallback: pgrep (is it running?) + window title via xdotool.
         boolean running = !run("pgrep", "-x", "spotify").isBlank();
@@ -434,46 +444,92 @@ public final class SpotifyProcess {
                              : new Snapshot(Status.PLAYING, title);
     }
 
-    /** Maps a playerctl output ({@code status|track}) to a state. */
-    private static Snapshot parsePlayerctl(String out) {
+    /**
+     * Reads the MPRIS state through playerctl. Returns {@code null} when the probe cannot
+     * be used (no playerctl, it failed to run, or no Spotify player is registered) so the
+     * caller can try the next probe; error output is never mistaken for metadata.
+     */
+    private static Snapshot readPlayerctl(String binary, File libDir) {
+        ProcessResult result = runPlayerctl(binary, libDir, "--player=spotify", "metadata", "--format",
+                "{{ status }}|{{ title }} - {{ artist }}");
+        if (result.exitCode() != 0) {
+            // playerctl prints "No player could handle this command" to stderr and exits
+            // non-zero when no player matches the name (or when the binary itself could
+            // not run): that is a missing player, not data.
+            return null;
+        }
+        String out = firstNonBlankLine(result.output());
+        if (out == null) {
+            return null;
+        }
         int separator = out.indexOf('|');
-        String status = (separator >= 0 ? out.substring(0, separator) : out).trim().toLowerCase(Locale.ROOT);
-        String track = separator >= 0 ? out.substring(separator + 1).strip() : "";
-        return switch (status) {
-            case "playing" -> track.isEmpty() ? new Snapshot(Status.UNKNOWN, null)
-                                               : new Snapshot(Status.PLAYING, track);
-            case "paused", "stopped" -> new Snapshot(Status.PAUSED, null);
-            default -> new Snapshot(Status.UNKNOWN, null);
-        };
+        if (separator < 0) {
+            return null;
+        }
+        String status = out.substring(0, separator).trim().toLowerCase(Locale.ROOT);
+        if (!(status.equals("playing") || status.equals("paused") || status.equals("stopped"))) {
+            return null;
+        }
+        String track = out.substring(separator + 1).strip();
+        return status.equals("playing")
+                ? (track.isEmpty() ? new Snapshot(Status.UNKNOWN, null)
+                                   : new Snapshot(Status.PLAYING, track))
+                : new Snapshot(Status.PAUSED, null);
     }
 
     /**
-     * Resolves the playerctl binary on Linux: first the one bundled in the mod's JAR
-     * (extracted to the user's temp directory on first use, no root needed) and, if it is
-     * not available, the system-installed one ({@code playerctl} on the PATH).
+     * Resolves the playerctl binary bundled in the mod's JAR (extracted to the user's temp
+     * directory on first use, no root needed), or {@code null} when it is not available
+     * for this architecture — the caller then uses the system-installed {@code playerctl}.
+     *
+     * <p>The official release binary is dynamically linked against {@code libplayerctl.so.2}
+     * (and glib), which most distros do not ship by default, so the mod bundles that
+     * library too and exposes it through {@code LD_LIBRARY_PATH}; the remaining glib
+     * libraries come from the system (present on any desktop Linux).
      */
-    private static String playerctlBinary() {
+    private static String bundledPlayerctlBinary() {
         String arch = linuxArch();
         String resource = "/assets/craftify/native/linux/" + arch + "/playerctl";
+        File dir = new File(System.getProperty("java.io.tmpdir"), "craftify-playerctl-" + arch + "-v2.4.1-r2");
+        File binary = new File(dir, "playerctl");
+        File lib = new File(dir, "libplayerctl.so.2");
+        if (binary.isFile() && lib.isFile()) {
+            return binary.getAbsolutePath();
+        }
         try (InputStream in = SpotifyProcess.class.getResourceAsStream(resource)) {
             if (in == null) {
-                return "playerctl";
+                return null;
             }
-            File dir = new File(System.getProperty("java.io.tmpdir"), "craftify-playerctl-" + arch + "-v2.4.1");
-            File binary = new File(dir, "playerctl");
-            if (!binary.isFile()) {
-                if (!dir.mkdirs() && !dir.isDirectory()) {
-                    return "playerctl";
-                }
-                try (OutputStream out = new FileOutputStream(binary)) {
+            if (!dir.mkdirs() && !dir.isDirectory()) {
+                return null;
+            }
+            try (OutputStream out = new FileOutputStream(binary)) {
+                in.transferTo(out);
+            }
+            binary.setExecutable(true, true);
+        } catch (IOException e) {
+            return null;
+        }
+        // Companion library for the bundled binary. A missing one is not fatal: when the
+        // system already has libplayerctl.so.2 (playerctl installed) the binary still runs.
+        try (InputStream in = SpotifyProcess.class.getResourceAsStream(
+                "/assets/craftify/native/linux/" + arch + "/libplayerctl.so.2")) {
+            if (in != null) {
+                try (OutputStream out = new FileOutputStream(lib)) {
                     in.transferTo(out);
                 }
-                binary.setExecutable(true, true);
             }
-            return binary.getAbsolutePath();
         } catch (IOException e) {
-            return "playerctl";
+            // Ignored: the system playerctl fallback covers this case.
         }
+        return binary.getAbsolutePath();
+    }
+
+    /** Directory of the bundled {@code libplayerctl.so.2}, or {@code null}. */
+    private static File playerctlLibDir() {
+        File lib = new File(new File(System.getProperty("java.io.tmpdir"),
+                "craftify-playerctl-" + linuxArch() + "-v2.4.1-r2"), "libplayerctl.so.2");
+        return lib.isFile() ? lib.getParentFile() : null;
     }
 
     /** Architecture of the bundled playerctl binary (x86_64 by default). */
@@ -517,8 +573,36 @@ public final class SpotifyProcess {
     }
 
     private static ProcessResult runWithExit(String... command) {
+        return runProcess(new ProcessBuilder(command).redirectErrorStream(true));
+    }
+
+    /**
+     * Runs the bundled playerctl exposing the companion library directory through
+     * {@code LD_LIBRARY_PATH} (the official binary is linked against
+     * {@code libplayerctl.so.2}, which the mod ships because most distros do not).
+     */
+    private static ProcessResult runPlayerctl(String binary, File libDir, String... args) {
+        ProcessBuilder builder = new ProcessBuilder(concat(binary, args)).redirectErrorStream(true);
+        if (libDir != null) {
+            String existing = System.getenv("LD_LIBRARY_PATH");
+            builder.environment().put("LD_LIBRARY_PATH",
+                    existing == null || existing.isBlank()
+                            ? libDir.getAbsolutePath()
+                            : libDir.getAbsolutePath() + File.pathSeparator + existing);
+        }
+        return runProcess(builder);
+    }
+
+    private static String[] concat(String first, String... rest) {
+        String[] command = new String[rest.length + 1];
+        command[0] = first;
+        System.arraycopy(rest, 0, command, 1, rest.length);
+        return command;
+    }
+
+    private static ProcessResult runProcess(ProcessBuilder builder) {
         try {
-            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            Process process = builder.start();
             // Wait with the timeout BEFORE reading (all our commands produce tiny output,
             // so reading after the process exits is safe and the timeout actually fires
             // when a command hangs without writing anything).

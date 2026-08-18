@@ -72,11 +72,15 @@ The mod also detects when Spotify is **paused** (no active song), per OS:
 - **Linux**: uses **MPRIS** via `playerctl` as the main probe: a single invocation gives
   process + title, works with the window minimized, **no permissions** and no X11/Wayland
   dependency. **You don't need to install anything with sudo**: the mod bundles the
-  official playerctl binary (MIT, only depends on `libglib2.0-0`) inside the JAR and
-  extracts it to the user's temp directory on first use. Only if that binary can't run does
-  it fall back to `pgrep` + `xdotool` (e.g. `sudo apt install xdotool`) or the system
-  `playerctl`. Spotify's local API (port 4380) no longer exists on modern clients. Spotify
-  must run in the same graphical session as the user.
+  official playerctl binary (MIT) **and its companion library `libplayerctl.so.2`** inside
+  the JAR and extracts both to the user's temp directory on first use (the binary is
+  dynamically linked against that library, which most distros do not ship, so the mod
+  exposes it through `LD_LIBRARY_PATH`; the remaining glib libraries come from the
+  system). If the bundled copy cannot run or reports no Spotify player, it falls back to
+  the system-installed `playerctl`, and then to `pgrep` + `xdotool` (e.g. `sudo apt
+  install xdotool`; note `xdotool` needs X11, so on Wayland the `playerctl`/MPRIS path is
+  the one that works). Spotify's local API (port 4380) no longer exists on modern clients.
+  Spotify must run in the same graphical session as the user.
 
 ## Lyrics overlay (LRCLib)
 
@@ -331,7 +335,9 @@ The mod bundles two small OS binaries inside the JAR (extracted to the user's te
 directory on first use, no root needed):
 
 - **playerctl** (Linux, x86_64/aarch64) — MPRIS player control, [MIT
-  license](https://github.com/altdesktop/playerctl/blob/master/COPYING).
+  license](https://github.com/altdesktop/playerctl/blob/master/COPYING), together with its
+  companion `libplayerctl.so.2` (the official release binary is dynamically linked against
+  it, so the mod bundles both and runs it with `LD_LIBRARY_PATH`).
 - **nowplaying-cli** v2.1.0 (macOS, arm64) — reads the now-playing track via the private
   MediaRemote framework, [GPL-3.0](https://github.com/kirtan-shah/nowplaying-cli).
   This project is GPL-3.0 as well, so bundling it is compatible; the binary can be
@@ -345,7 +351,7 @@ To update or re-fetch them:
 
 ```bash
 cd CraftifyMod
-bash scripts/fetch-linux-playerctl.sh   # Linux
+bash scripts/fetch-linux-playerctl.sh   # Linux (binary + libplayerctl.so.2)
 curl -L -o src/main/resources/assets/craftify/native/macos/arm64/nowplaying-cli \
   https://github.com/kirtan-shah/nowplaying-cli/releases/download/v2.1.0/nowplaying-cli
 # nowplaying-cli v2.1.0 companion helper files (macOS 15.4+); fetched from the Homebrew bottle:

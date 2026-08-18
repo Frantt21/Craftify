@@ -23,6 +23,11 @@ Minecraft mod + server plugin that shows the song the player is listening to on 
 - **Intel Macs** keep the AppleScript fallback, which needs the one-time Automation prompt. If MediaRemote returns nothing (e.g. nothing playing), AppleScript is tried too.
 - While the Automation permission is pending/denied, the mod backs off the AppleScript query (retry every 5 s) and notifies once in chat. A failing/hanging `nowplaying-cli` is backed off too (retry every 30 s) so a broken binary cannot block the tracker thread for the full command timeout on every poll.
 
+## Linux & macOS detection fixes
+
+- **Linux:** the bundled playerctl binary is dynamically linked against `libplayerctl.so.2`, which most distros do not ship — on systems without the `playerctl` package it failed to start and the mod reported `no_track` forever (the loader error was mistaken for MPRIS data). The mod now bundles `libplayerctl.so.2` too and runs the binary with `LD_LIBRARY_PATH`; playerctl output is only accepted when the command exits 0 with a real MPRIS status, and the probe chain is now bundled playerctl → system playerctl → `pgrep` + `xdotool`. This fixes Spotify detection on distros without playerctl installed (e.g. CachyOS KDE Plasma, where `xdotool` also does not work on Wayland).
+- **macOS:** `nowplaying-cli` (MediaRemote, no permission) is now also tried when the JNA probe is unavailable (previously it went straight to AppleScript, which cannot get the Automation permission for the Java process). The release JAR also had the two companion helper files of `nowplaying-cli` missing, which disabled the MediaRemote path entirely — the JAR is rebuilt with them.
+
 ## Pause detection
 
 - **Windows:** the window title reverts to the account tier (`"Spotify Free"`/`"Spotify Premium"`) while paused — no extra cost.
