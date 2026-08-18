@@ -308,6 +308,22 @@ public final class SpotifyCommand {
                     .append(Component.literal("Spotify closed (closed)").withStyle(ChatFormatting.RED)));
         }
 
+        if (os == SpotifyProcess.Os.MACOS) {
+            feedback.accept(Component.literal("[Craftify] macOS diagnostics:")
+                    .withStyle(ChatFormatting.GOLD));
+            feedback.accept(Component.literal("[Craftify]  - MediaRemote (nowplaying-cli): ")
+                    .withStyle(ChatFormatting.GOLD)
+                    .append(Component.literal(SpotifyProcess.macosNowPlayingDiagnostic())
+                            .withStyle(ChatFormatting.GRAY)));
+            feedback.accept(Component.literal("[Craftify]  - AppleScript (fallback): ")
+                    .withStyle(ChatFormatting.GOLD)
+                    .append(SpotifyProcess.macosAppleScriptBlocked()
+                            ? Component.literal("blocked (Automation permission pending or denied)")
+                                    .withStyle(ChatFormatting.RED)
+                            : Component.literal("available (used only if MediaRemote returns nothing)")
+                                    .withStyle(ChatFormatting.GREEN)));
+        }
+
         sendLyricsStatus(feedback);
 
         feedback.accept(Component.literal("[Craftify] Packet sending: ")
@@ -322,9 +338,14 @@ public final class SpotifyCommand {
     /** Suggests what to do when the state could not be determined, per operating system. */
     private static void sendNoTrackHint(Consumer<Component> feedback, SpotifyProcess.Os os) {
         Component hint = switch (os) {
-            case MACOS -> Component.literal("[Craftify] To read the track: accept the \"control Spotify\" "
-                    + "prompt when it appears (once).")
-                    .withStyle(ChatFormatting.GRAY);
+            case MACOS -> SpotifyProcess.macosAppleScriptBlocked()
+                    ? Component.literal("[Craftify] To read the track: accept the \"control Spotify\" prompt when it "
+                            + "appears (once). If it does not appear, enable it manually at System Settings "
+                            + "> Privacy & Security > Automation (Minecraft/Java -> Spotify).")
+                            .withStyle(ChatFormatting.GRAY)
+                    : Component.literal("[Craftify] To read the track: accept the \"control Spotify\" "
+                            + "prompt when it appears (once).")
+                            .withStyle(ChatFormatting.GRAY);
             case LINUX -> Component.literal("[Craftify] No title: the mod bundles playerctl; as a backup "
                     + "install xdotool (e.g. sudo apt install xdotool) or the system playerctl.")
                     .withStyle(ChatFormatting.GRAY);

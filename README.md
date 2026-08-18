@@ -29,8 +29,9 @@ must receive it — is defined in [`PROTOCOL.md`](PROTOCOL.md).
    operating system: it detects the Spotify process (Windows/macOS/Linux) and reads the
    current song and its **pause state** (playing / paused / closed). On Windows it reads
    the window title (it changes with each song, typically `Song - Artist`, and reverts to
-   the account tier when paused); on macOS both come from Spotify's own AppleScript
-   dictionary; on Linux from MPRIS via `playerctl`.
+   the account tier when paused); on macOS from MediaRemote via the bundled
+   `nowplaying-cli` (no permission, Apple Silicon) with AppleScript as fallback; on Linux
+   from MPRIS via `playerctl`.
 2. **Only when the state changes** (new song, Spotify closed, etc.) it sends a
    `minecraft:custom_payload` packet on the `craftify:title` channel with a three-field
    JSON: `state` (`playing` / `paused` / `no_track` / `closed`), `track` and `timestamp`.

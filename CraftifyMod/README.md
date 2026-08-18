@@ -26,8 +26,9 @@ The mod also detects when Spotify is **paused** (no active song), per OS:
 - **Windows:** the window title reverts to the account tier (`"Spotify Free"`/`"Spotify
   Premium"`) while paused — "Spotify running without a song title" means paused, with no
   extra cost.
-- **macOS:** Spotify's `player state` (`playing`/`paused`/`stopped`) via the same
-  AppleScript call that reads the track.
+- **macOS:** `playbackRate` of the now-playing info via the bundled `nowplaying-cli`
+  (0 = paused), falling back to Spotify's `player state` via AppleScript when the binary
+  is unavailable.
 - **Linux:** MPRIS `PlaybackStatus` via `playerctl` (same single invocation as the
   metadata). The `xdotool` fallback cannot detect pause (a readable title means playing).
 
@@ -36,7 +37,7 @@ The mod also detects when Spotify is **paused** (no active song), per OS:
 | OS      | Executable    | Process detection        | Title reading |
 |---------|---------------|------------------------------|--------------------|
 | Windows | `Spotify.exe` | JNA/Win32 (Toolhelp32) with `tasklist` fallback | JNA/Win32 (`EnumWindows` + `GetWindowText`) with PowerShell fallback |
-| macOS   | `Spotify`     | JNA/CoreGraphics (window owner) with `pgrep` fallback | Spotify AppleScript (Automation) — the native window title is the account tier, not the song, so it is skipped |
+| macOS   | `Spotify`     | JNA/CoreGraphics (window owner) with `pgrep` fallback | MediaRemote via bundled `nowplaying-cli` (no permission) with AppleScript (Automation) fallback — the native window title is the account tier, not the song, so it is skipped |
 | Linux   | `spotify`     | MPRIS/`playerctl` (implies running); `pgrep -x spotify` fallback | MPRIS/`playerctl` (metadata) with `xdotool` fallback (window) |
 
 ### Requirements per OS
@@ -46,12 +47,28 @@ The mod also detects when Spotify is **paused** (no active song), per OS:
 - **macOS**: detecting the process needs no permissions. For the **track and the
   pause/play state**, the window title is **not** used: on macOS the Spotify window bar
   shows the **account tier** ("Spotify Free"/"Spotify Premium", regardless of the song),
-  never the song title. Both come from **Spotify's own AppleScript dictionary** (`player
-  state` + `current track`) — the easiest path is accepting the one-time **"control
-  Spotify"** (Automation) prompt when it appears when you join the game, one click, no
-  need to open System Settings. Without that permission the state stays `no_track`.
-  (Screen Recording / Accessibility do **not** help here: the window title never contains
-  the song.)
+  never the song title. On **Apple Silicon (arm64)** the mod bundles
+  [`nowplaying-cli`](https://github.com/kirtan-shah/nowplaying-cli) and reads the track
+  via the private **MediaRemote** framework — **no permission of any kind is needed**
+  (no Automation, no Screen Recording); it works even with the window hidden. The v2.1.0
+  build also ships (and extracts) the two companion helper files it needs on macOS 15.4+
+  (`mediaremote-mini.pl` + `MediaRemoteMini.dylib`). On
+  **Intel Macs** (no arm64 binary) it falls back to **Spotify's own AppleScript
+  dictionary** (`player state` + `current track`), which needs the one-time
+  **"control Spotify"** (Automation) prompt — accept it when it appears when you join
+  the game, one click, no need to open System Settings. If MediaRemote ever returns
+  nothing (e.g. nothing playing), the same AppleScript fallback applies. While the
+  Automation permission is pending or denied, the mod **backs off** the AppleScript
+  query (retries every 5 s instead of every poll, so the system dialog is not re-triggered
+  or blocked repeatedly), tells you **once in chat** what to do, and the hint of
+  `/craftify spotify` includes the manual path
+  (`System Settings > Privacy & Security > Automation`). Note: accepting the prompt
+  from **Terminal** (or granting the permission to Terminal) does **not** help the mod —
+  the Automation permission is per-app, and in-game the event comes from the
+  Minecraft/Java process, which may have no bundle identifier (in that case no prompt
+  appears at all and the permission cannot be granted from System Settings). (Screen
+  Recording / Accessibility do **not** help here: the window title never contains the
+  song.)
 - **Linux**: uses **MPRIS** via `playerctl` as the main probe: a single invocation gives
   process + title, works with the window minimized, **no permissions** and no X11/Wayland
   dependency. **You don't need to install anything with sudo**: the mod bundles the
@@ -192,6 +209,25 @@ If the process is not running or the title could not be read, the command says s
 and, depending on the platform, suggests what to do (accept the Automation prompt on
 macOS, install `playerctl`/`xdotool` on Linux, etc.).
 
+On macOS the command also prints a **diagnostics** block that shows which stage of the
+read chain is failing:
+
+```
+[Craftify] macOS diagnostics:
+[Craftify]  - MediaRemote (nowplaying-cli): no bundled binary for this arch (os.arch=x86_64) -> AppleScript fallback
+[Craftify]  - AppleScript (fallback): blocked (Automation permission pending or denied)
+```
+
+The `MediaRemote` line reports whether the bundled binary is available for the machine's
+architecture and its raw output (e.g. `{"title":null,"artist":null,"playbackRate":null}`
+when nothing is playing). If the binary produced no output it also reports its **exit
+code** — `137` (SIGKILL) means macOS killed it at the code-signature check (the mod
+re-signs it ad-hoc on extraction, so this should not happen), `0` means it ran but
+printed nothing, and a timeout message means it hung. The `AppleScript` line reports
+whether the Automation permission is blocking the fallback — so you can tell apart an
+architecture problem, a binary problem, a MediaRemote problem and a permission problem
+at a glance.
+
 ### `/craftify send` — pause/resume packet sending
 
 - `/craftify send off` pauses sending (tracking keeps reading, but no packets are sent).
@@ -289,11 +325,32 @@ cd CraftifyMod
 The JAR ends up in `CraftifyMod/build/libs/CraftifyMod-1.0.1.jar` and installs like any
 Fabric mod in the client's `mods` folder.
 
-The playerctl binary is already bundled in the resources; to update or re-fetch it:
+### Bundled third-party binaries
+
+The mod bundles two small OS binaries inside the JAR (extracted to the user's temp
+directory on first use, no root needed):
+
+- **playerctl** (Linux, x86_64/aarch64) — MPRIS player control, [MIT
+  license](https://github.com/altdesktop/playerctl/blob/master/COPYING).
+- **nowplaying-cli** v2.1.0 (macOS, arm64) — reads the now-playing track via the private
+  MediaRemote framework, [GPL-3.0](https://github.com/kirtan-shah/nowplaying-cli).
+  This project is GPL-3.0 as well, so bundling it is compatible; the binary can be
+  replaced/relinked by rebuilding the mod. Its private-framework usage may break on
+  future macOS updates — the AppleScript fallback covers that case. The v2.1.0 build
+  requires two companion files next to the binary to work on macOS 15.4+
+  (`share/nowplaying-cli/scripts/mediaremote-mini.pl` + `lib/nowplaying-cli/MediaRemoteMini.dylib`);
+  the mod bundles all three and extracts them together.
+
+To update or re-fetch them:
 
 ```bash
 cd CraftifyMod
-bash scripts/fetch-linux-playerctl.sh
+bash scripts/fetch-linux-playerctl.sh   # Linux
+curl -L -o src/main/resources/assets/craftify/native/macos/arm64/nowplaying-cli \
+  https://github.com/kirtan-shah/nowplaying-cli/releases/download/v2.1.0/nowplaying-cli
+# nowplaying-cli v2.1.0 companion helper files (macOS 15.4+); fetched from the Homebrew bottle:
+#   src/main/resources/assets/craftify/native/macos/arm64/share/nowplaying-cli/scripts/mediaremote-mini.pl
+#   src/main/resources/assets/craftify/native/macos/arm64/lib/nowplaying-cli/MediaRemoteMini.dylib
 ```
 
 ## Project configuration

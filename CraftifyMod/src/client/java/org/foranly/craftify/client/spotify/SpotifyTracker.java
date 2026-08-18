@@ -4,6 +4,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import org.foranly.craftify.client.lyrics.LyricsManager;
 import org.foranly.craftify.client.network.SpotifyTitlePayload;
 
@@ -58,6 +61,8 @@ public final class SpotifyTracker {
     private static volatile long pendingAt;
     /** Burst polls left before applying the pending transition. */
     private static volatile int burstLeft;
+    /** Whether the one-time macOS Automation notice was already sent (reset on a track). */
+    private static volatile boolean macosNoticeSent;
 
     private SpotifyTracker() {
     }
@@ -204,6 +209,17 @@ public final class SpotifyTracker {
             lastPlayingAt = 0;
         }
 
+        if (state.equals(SpotifyTitlePayload.STATE_PLAYING)) {
+            // A track was read again: allow the macOS notice to fire on a future block.
+            macosNoticeSent = false;
+        } else if (state.equals(SpotifyTitlePayload.STATE_NO_TRACK)
+                && SpotifyProcess.currentOs() == SpotifyProcess.Os.MACOS
+                && SpotifyProcess.macosAppleScriptBlocked()
+                && !macosNoticeSent) {
+            macosNoticeSent = true;
+            notifyMacosPermission();
+        }
+
         LyricsManager.instance().onState(state, track, transitionAt);
 
         // Send only when the state + title combination changes (and not paused).
@@ -225,6 +241,22 @@ public final class SpotifyTracker {
             }
             executor.schedule(SpotifyTracker::tick, delay, TimeUnit.MILLISECONDS);
         }
+    }
+
+    /**
+     * Tells the player (once, in chat) that macOS needs the Automation permission to read
+     * the track — the system dialog can be easy to miss in fullscreen.
+     */
+    private static void notifyMacosPermission() {
+        Minecraft.getInstance().execute(() -> {
+            if (Minecraft.getInstance().player != null) {
+                Minecraft.getInstance().player.sendSystemMessage(Component.literal(
+                        "[Craftify] macOS needs your permission to read Spotify: accept the \"control Spotify\" "
+                                + "prompt when it appears (once), or enable it manually at "
+                                + "System Settings > Privacy & Security > Automation.")
+                        .withStyle(ChatFormatting.GRAY));
+            }
+        });
     }
 
     private static void send(String state, String track) {
